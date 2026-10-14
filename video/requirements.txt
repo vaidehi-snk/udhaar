@@ -1,0 +1,4 @@
+playwright>=1.40
+soundfile>=0.12
+# optional, to re-render the narration:
+# kokoro-onnx>=0.4

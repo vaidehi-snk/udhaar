@@ -1,0 +1,28 @@
+name: ci
+
+# Every push: run the tests, re-score the rule parser on all counter lines, and check that the
+# prediction pipelines (forecast, risk, credit limit, price check) still run end to end
+# (on the gradient-boosting fallback, so CI needs no API key).
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      OLLAMA_URL: http://127.0.0.1:9     # no model in CI: exercises the rules fallback
+      UDHAAR_NO_LOCAL_TABPFN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-demo.txt pytest
+      - name: Tests
+        run: python -m pytest -q
+      - name: Parser accuracy (rules) → job summary
+        run: |
+          echo "## Parser accuracy on counter lines" >> "$GITHUB_STEP_SUMMARY"
+          python scripts/eval_parser.py --rules-only --markdown >> "$GITHUB_STEP_SUMMARY"

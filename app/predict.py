@@ -181,6 +181,7 @@ def _cust_snapshot(e: pd.DataFrame, at: pd.Timestamp) -> pd.DataFrame:
             "n_payments": len(pay),
             "repay_ratio": pay["amount"].sum() / max(cr["amount"].sum(), 1),
             "avg_pay_gap": gaps.mean() if len(gaps) else 90.0,
+            "credit_sum": cr["amount"].sum(), "pay_sum": pay["amount"].sum(),   # for what-if, not features
         })
     return pd.DataFrame(rows)
 
@@ -226,5 +227,125 @@ def udhaar_risk(entries: pd.DataFrame, names: dict[int, str], today: pd.Timestam
                     "features": {k: round(float(r[k]), 2) for k in RISK_FEATURES},
                     "band": "high" if p >= 0.6 else "watch" if p >= 0.35 else "ok"})
     out.sort(key=lambda r: r["risk"], reverse=True)
+    # keep the fitted model: the agent's what-if and credit-limit tools reuse it without refitting
+    _risk_state.update(model=model, engine=engine, now=now.copy(), names=dict(names), entries=e)
     return {"engine": engine, "as_of": today.date().isoformat(), "train_rows": int(len(y)),
             "customers": out}
+
+
+# ------------------------------------------------------------------ agent tools on the risk model
+_risk_state: dict = {}
+BAND_HIGH, BAND_WATCH = 0.6, 0.35
+
+
+def _risk_row(name: str):
+    st = _risk_state
+    if not st:
+        return None
+    cid = next((k for k, v in st["names"].items() if v.lower() == (name or "").lower()), None)
+    r = st["now"][st["now"]["customer_id"] == cid]
+    return None if r.empty else r.iloc[0]
+
+
+def _scenario(r, extra: float = 0.0, days: int = 0) -> list[float]:
+    """The same customer, `days` from now with no payment, after `extra` more on udhaar."""
+    keep = max(0.0, 1 - days / 30)                     # the 30-day window slides forward
+    s = {"due": r["due"] + extra,
+         "days_since_payment": r["days_since_payment"] + days,
+         "days_since_first_credit": r["days_since_first_credit"] + days,
+         "credits_30d": r["credits_30d"] * keep + (1 if extra > 0 else 0),
+         "credit_amt_30d": r["credit_amt_30d"] * keep + extra,
+         "n_payments": r["n_payments"],
+         "repay_ratio": r["pay_sum"] / max(r["credit_sum"] + extra, 1),
+         "avg_pay_gap": r["avg_pay_gap"]}
+    return [float(s[k]) for k in RISK_FEATURES]
+
+
+def _proba(rows: list[list[float]]) -> np.ndarray:
+    return np.asarray(_risk_state["model"].predict_proba(np.array(rows, dtype=float))[:, 1], dtype=float)
+
+
+def what_if(name: str, extra: float = 0.0, days: int = 0) -> dict | None:
+    """Re-score one customer under a scenario, in one TabPFN call (now vs then)."""
+    r = _risk_row(name)
+    if r is None:
+        return None
+    p = _proba([_scenario(r), _scenario(r, extra, days)])
+    p[1] = max(p[1], p[0])   # prior: more credit or a longer silence never makes someone SAFER
+    return {"customer": _risk_state["names"][int(r["customer_id"])], "due": round(float(r["due"])),
+            "extra": round(extra), "days": int(days), "now": round(float(p[0]), 2),
+            "then": round(float(p[1]), 2), "engine": _risk_state["engine"]}
+
+
+def _monthly_capacity(cid: int) -> float:
+    """The most this customer has ever paid back within 30 days."""
+    e = _risk_state["entries"]
+    pay = e[(e["customer_id"] == cid) & (e["kind"] == "payment")].set_index("ts")["amount"].sort_index()
+    return float(pay.rolling("30D").sum().max()) if len(pay) else 0.0
+
+
+def credit_limit(name: str) -> dict | None:
+    """How much more udhaar can I safely give? Two limits, the tighter one wins:
+    - capacity: they have never paid back more than X in a month, so dues above X pile up;
+    - risk: TabPFN scores a ladder of 'what if I give Y more' in ONE batched call, and the
+      limit is the last step before their late-payment risk crosses the line."""
+    r = _risk_row(name)
+    if r is None:
+        return None
+    cid, due = int(r["customer_id"]), float(r["due"])
+    cap = _monthly_capacity(cid)
+    headroom = max(cap - due, 0.0)
+    top = max(500.0, 1.5 * headroom)
+    grid = sorted({0.0, *[float(round(v / 50) * 50) for v in np.linspace(0, top, 16)]})
+    p = np.maximum.accumulate(_proba([_scenario(r, g) for g in grid]))   # same prior along the ladder
+    base = float(p[0])
+    line = BAND_WATCH if base < BAND_WATCH else BAND_HIGH
+    over = next((i for i, v in enumerate(p) if v >= line), None)
+    risk_limit = grid[-1] if over is None else grid[max(over - 1, 0)]
+    if base >= BAND_HIGH:
+        limit, verdict = 0, "collect"          # already likely to pay late: collect before giving more
+    else:
+        room = headroom if line == BAND_WATCH else headroom / 2   # already on watch: be conservative
+        limit = int(min(risk_limit, room) // 50 * 50)
+        verdict = ("ok" if line == BAND_WATCH else "small") if limit > 0 else "full"
+    return {"customer": _risk_state["names"][cid], "due": round(due), "risk_now": round(base, 2),
+            "limit": limit, "verdict": verdict, "line": line,
+            "capacity": round(cap), "binding": "capacity" if limit < risk_limit else "risk",
+            "curve": [[int(g), round(float(v), 2)] for g, v in zip(grid, p)],
+            "engine": _risk_state["engine"]}
+
+
+# ------------------------------------------------------------------ price check (anomaly)
+_price: dict = {}
+
+
+def price_check(entries: pd.DataFrame, item: str, qty: float, amount: float, backend: str = "auto") -> dict | None:
+    """Does this amount look like what THIS shop charges for this item and quantity?
+    TabPFN regresses price-per-unit from the shop's own recent entries (item, quantity, unit).
+    Catches the classic speech slip: '920' heard for '92'. Returns None if there's too little history."""
+    if not item or not qty or not amount or qty <= 0:
+        return None
+    e = entries[entries["kind"].isin(["sale", "credit"]) & entries["item"].notna()
+                & (entries["qty"] > 0) & (entries["amount"] > 0)].tail(2000)
+    if (e["item"] == item).sum() < 5:
+        return None
+    t0 = datetime.now()
+    key = (len(entries) // 100, backend)
+    if _price.get("key") != key:
+        items = sorted(e["item"].unique())
+        units = sorted(e["unit"].fillna("").unique())
+        codes, ucodes = {it: i for i, it in enumerate(items)}, {u: i for i, u in enumerate(units)}
+        X = np.column_stack([e["item"].map(codes), e["qty"], e["unit"].fillna("").map(ucodes)]).astype(float)
+        y = (e["amount"] / e["qty"]).to_numpy(dtype=float)
+        model, engine = _backend("reg", backend)
+        model.fit(X, y)
+        _price.update(key=key, model=model, engine=engine, codes=codes, ucodes=ucodes,
+                      units=e.groupby("item")["unit"].agg(lambda u: u.mode().iat[0] if len(u.mode()) else None).to_dict())
+    unit = _price["units"].get(item) or ""
+    x = np.array([[_price["codes"][item], qty, _price["ucodes"].get(unit, 0)]], dtype=float)
+    per_unit = float(np.asarray(_price["model"].predict(x)).ravel()[0])
+    expected = round(per_unit * qty)
+    ratio = amount / max(expected, 1)
+    odd = (ratio > 2.2 or ratio < 0.45) and abs(amount - expected) >= 20
+    return {"item": item, "qty": qty, "amount": round(amount), "expected": expected, "odd": bool(odd),
+            "engine": _price["engine"], "ms": round((datetime.now() - t0).total_seconds() * 1000)}

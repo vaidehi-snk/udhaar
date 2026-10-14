@@ -50,7 +50,8 @@ def test_api_and_predictions_on_demo_data():
     assert {"ghee", "maida", "besan", "sugar"} & set(top), top  # Diwali items rise
     bands = {x["customer"]: x["band"] for x in ins["risk"]["customers"]}
     assert bands.get("Bhosale Dada") == "high"
-    assert c.get("/").status_code == 200
+    assert c.get("/").status_code == 200 and "fiado" in c.get("/").text      # landing page
+    assert c.get("/app").status_code == 200 and 'id="q"' in c.get("/app").text
 
 
 def test_detail_summary_backtest_endpoints():
@@ -95,3 +96,36 @@ def test_global_corner_shops():
     assert c.post("/api/ask", json={"text": "Bu Sri bayar 50 ribu"}).json()["mode"] == "entry"
     t = c.post("/api/reminder", json={"customer": "Aling Nena", "due": 85, "language": "filipino"}).json()["text"]
     assert "Aling Nena" in t and "85" in t
+
+
+def test_agent_tools_credit_limit_what_if_and_trace():
+    c = TestClient(app)
+    c.get("/api/insights")
+    r = c.post("/api/ask", json={"text": "How much more udhaar can I give Bhosale Dada?"}).json()
+    assert r["intent"] == "credit_limit" and "Collect first" in r["answer"], r
+    assert [s["step"] for s in r["trace"]] == ["plan", "credit_limit"]
+    r = c.post("/api/ask", json={"text": "Shinde mama la ajun kiti udhaar deu?"}).json()
+    assert r["intent"] == "credit_limit" and r["curve"] and r["curve"][0][0] == 0
+    risks = [p for _, p in r["curve"]]
+    assert risks == sorted(risks)                                    # never safer with more credit
+    r = c.post("/api/ask", json={"text": "What if Gaikwad Sir doesn't pay for 3 weeks?"}).json()
+    assert r["intent"] == "what_if" and r["trace"][1]["args"]["days"] == 21
+
+
+def test_price_check_flags_extra_zero():
+    import time
+    c = TestClient(app)
+    r = c.post("/api/ask", json={"text": "Patil kaku, don kilo sakhar, 920 udhaar"}).json()
+    for _ in range(50):
+        j = c.get(f"/api/refine/{r['refine']}").json()
+        if j.get("checked"):
+            break
+        time.sleep(0.1)
+    assert j["check"]["odd"] and 70 <= j["check"]["expected"] <= 120
+    r = c.post("/api/ask", json={"text": "Patil kaku, don kilo sakhar, 92 udhaar"}).json()
+    for _ in range(50):
+        j = c.get(f"/api/refine/{r['refine']}").json()
+        if j.get("checked"):
+            break
+        time.sleep(0.1)
+    assert j["check"]["odd"] is False

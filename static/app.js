@@ -23,10 +23,12 @@ const T = {
     "dlg.close": "Close", "dlg.copy": "Copy", "dlg.wa": "Send on WhatsApp",
     hello: h => h < 12 ? "Good morning." : h < 17 ? "Good afternoon." : "Good evening.",
     sub: (due, n) => `${due} is out on udhaar across ${n} customers.`,
-    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "Who owes the most?", "Doña Rosa, dos kilos de azúcar, 96 fiado", "How much sugar next week?", "Aling Nena, isang kilong bigas, 85 utang", "Bu Sri bayar 50 ribu", "Aaj ka hisab"],
-    hintsK: "Try", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Doña Rosa, dos kilos de azúcar, 96 fiado", "Aling Nena isang kilong bigas 85 utang", "Pak Budi ngutang beras 2 kilo 30 ribu", "Who owes the most?", "How much sugar next week?", "What should I order?"],
+    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "Who owes the most?", "How much more udhaar can I give Shinde Mama?", "Doña Rosa, dos kilos de azúcar, 96 fiado", "How much sugar next week?", "What if Gaikwad Sir doesn't pay for 3 weeks?", "Aling Nena, isang kilong bigas, 85 utang", "Bu Sri bayar 50 ribu", "Aaj ka hisab"],
+    hintsK: "Try", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Doña Rosa, dos kilos de azúcar, 96 fiado", "Aling Nena isang kilong bigas 85 utang", "Pak Budi ngutang beras 2 kilo 30 ribu", "Who owes the most?", "How much more udhaar can I give Shinde Mama?", "What if Gaikwad Sir doesn't pay for 3 weeks?", "How much sugar next week?", "What should I order?"],
     listening: "Listening… tap again to stop", tooShort: "That was too short. Tap, speak, then tap again.", working: "Working…",
     kind: { credit: "Udhaar", sale: "Cash sale", payment: "Paid back" }, band: { high: "Likely late", watch: "Watch", ok: "Reliable" },
+    priceOdd: (a, item, q, e) => `${a} for ${q} ${item}? This shop usually charges about ${e}.`, priceFix: e => `Change to ${e}`, priceKeep: "It's right", priceOk: "Price looks usual ✓", fixed: "Fixed",
+    trace: "How it got this", plan: "plan", limitT: "Can I give more udhaar?", limitLbl: v => `limit ${v}`, ladderCap: "chance of paying late, if you give this much more",
     walkin: "Walk-in", written: "Written to the khata", checking: "Gemma checking…", corrected: e => `Corrected by ${e}`, confirmed: e => `Checked by ${e} ✓`, undo: "Undo", removed: "Removed",
     by: (e, ms) => `${e === "rules" ? "rules fallback" : e} · ${ms}`,
     remind: "Draft reminder", order: "Draft order", openCust: "Open",
@@ -47,7 +49,7 @@ const T = {
     reminderFor: n => `Reminder for ${n}`, reminderSub: "Drafted by Gemma on this laptop. Edit before sending.",
     orderT: "Order for the wholesaler", orderSub: "From the forecast. Edit quantities before sending.", copied: "Copied",
     gemmaWriting: "Writing…",
-    stages: [["Speak or type", "Marathi, Hindi, English, Spanish, Filipino, Indonesian, or a mix"], ["Whisper", "faster-whisper turns speech into text"], ["Gemma 3", "Decides: write an entry, or answer a question"], ["SQLite", "The khata. Every number comes from here"], ["TabPFN", "Late-payment risk and festival forecast"]],
+    stages: [["Speak or type", "Marathi, Hindi, English, Spanish, Filipino, Indonesian, or a mix"], ["Whisper", "faster-whisper turns speech into text"], ["Gemma 3", "Re-reads every entry; plans which tools answer a question"], ["SQLite", "The khata. Every number comes from here"], ["TabPFN", "Late-payment risk, credit limits, what-ifs, price checks, festival forecast"]],
     where: { local: "on the laptop", off: "not running", cloud: "API, numbers only", rules: "rules fallback", base: "baseline model" },
     stays: ["<b>The voice recording.</b> Transcribed locally, then deleted.", "<b>Names, phone numbers, amounts.</b> One file: <code>data/udhaar.db</code>.", "<b>Understanding sentences.</b> Gemma runs in Ollama. No internet needed."],
     leaves: ["<b>Anonymous numbers for TabPFN-3.5:</b> amounts, day counts, weekdays. No names, no items.", "<b>Nothing at all</b> if you install TabPFN's open weights locally.", "<b>Reminders and orders</b> are sent by the shopkeeper, from their own WhatsApp."],
@@ -72,9 +74,11 @@ const T = {
     hello: h => h < 12 ? "सुप्रभात." : h < 17 ? "नमस्कार." : "शुभ संध्याकाळ.",
     sub: (due, n) => `${n} ग्राहकांकडे एकूण ${due} उधार बाकी.`,
     ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "कोणाकडे सर्वात जास्त बाकी?", "Doña Rosa, dos kilos de azúcar, 96 fiado", "Pudhchya athavdyat kiti sakhar?", "Aling Nena, isang kilong bigas, 85 utang", "Aaj ka hisab"],
-    hintsK: "उदा.", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Kon jast baki?", "Pudhchya athavdyat kiti sakhar?", "Kay mangvaycha?", "Aaj ka hisab"],
+    hintsK: "उदा.", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Kon jast baki?", "Shinde mama la ajun kiti udhaar deu?", "Pudhchya athavdyat kiti sakhar?", "Kay mangvaycha?", "Aaj ka hisab"],
     listening: "ऐकत आहे… थांबवण्यासाठी पुन्हा टॅप करा", tooShort: "खूपच लहान. टॅप करा, बोला, मग पुन्हा टॅप करा.", working: "करत आहे…",
     kind: { credit: "उधार", sale: "रोख", payment: "जमा" }, band: { high: "उशीर शक्य", watch: "लक्ष ठेवा", ok: "भरवशाचे" },
+    priceOdd: (a, item, q, e) => `${q} ${item} साठी ${a}? हे दुकान सहसा सुमारे ${e} घेते.`, priceFix: e => `${e} करा`, priceKeep: "बरोबर आहे", priceOk: "किंमत नेहमीसारखी ✓", fixed: "दुरुस्त केले",
+    trace: "हे उत्तर कसे आले", plan: "योजना", limitT: "अजून उधार देऊ का?", limitLbl: v => `मर्यादा ${v}`, ladderCap: "इतके अजून उधार दिले तर उशिरा भरण्याची शक्यता",
     walkin: "रोख ग्राहक", written: "खात्यात लिहिले", checking: "Gemma तपासत आहे…", corrected: e => `${e} ने दुरुस्त केले`, confirmed: e => `${e} ने तपासले ✓`, undo: "मागे घ्या", removed: "काढले",
     by: (e, ms) => `${e === "rules" ? "नियम पद्धत" : e} · ${ms}`,
     remind: "आठवण तयार करा", order: "ऑर्डर तयार करा", openCust: "उघडा",
@@ -95,7 +99,7 @@ const T = {
     reminderFor: n => `${n} यांना आठवण`, reminderSub: "Gemma ने या लॅपटॉपवर लिहिले. पाठवण्यापूर्वी बदला.",
     orderT: "होलसेलरसाठी ऑर्डर", orderSub: "अंदाजावरून. पाठवण्यापूर्वी आकडे तपासा.", copied: "कॉपी केले",
     gemmaWriting: "लिहित आहे…",
-    stages: [["बोला किंवा लिहा", "मराठी, हिंदी, इंग्रजी, स्पॅनिश, फिलिपिनो, इंडोनेशियन किंवा मिसळून"], ["Whisper", "आवाजाचा मजकूर करते"], ["Gemma 3", "ठरवते: नोंद लिहायची की उत्तर द्यायचे"], ["SQLite", "खाते. प्रत्येक आकडा इथूनच"], ["TabPFN", "उशिरा भरणी आणि सणाचा अंदाज"]],
+    stages: [["बोला किंवा लिहा", "मराठी, हिंदी, इंग्रजी, स्पॅनिश, फिलिपिनो, इंडोनेशियन किंवा मिसळून"], ["Whisper", "आवाजाचा मजकूर करते"], ["Gemma 3", "प्रत्येक नोंद पुन्हा तपासते; प्रश्नासाठी कोणती साधने वापरायची ते ठरवते"], ["SQLite", "खाते. प्रत्येक आकडा इथूनच"], ["TabPFN", "उशिरा भरणी, उधार मर्यादा, किंमत तपासणी, सणाचा अंदाज"]],
     where: { local: "लॅपटॉपवर", off: "बंद", cloud: "API, फक्त आकडे", rules: "नियम पद्धत", base: "साधे मॉडेल" },
     stays: ["<b>आवाजाचे रेकॉर्डिंग.</b> इथेच मजकूर होऊन पुसले जाते.", "<b>नावे, फोन नंबर, रक्कम.</b> एकच फाइल: <code>data/udhaar.db</code>.", "<b>वाक्य समजणे.</b> Gemma Ollama मध्ये चालते. इंटरनेट लागत नाही."],
     leaves: ["<b>TabPFN-3.5 साठी निनावी आकडे:</b> रक्कम, दिवस, वार. नावे नाहीत, माल नाही.", "<b>काहीच नाही</b>, जर TabPFN चे open weights लॅपटॉपवर लावले.", "<b>आठवण आणि ऑर्डर</b> दुकानदार स्वतःच्या WhatsApp वरून पाठवतात."],
@@ -231,7 +235,7 @@ $("#mic").onclick = async () => {
 };
 
 function show(r, note = "") {
-  const meta = r.mode === "entry" ? (note || L().by(r.parsed._engine, (r.parsed._ms / 1000).toFixed(1) + "s") + (r.refine ? " · " + L().checking : "")) : L().by(r.engine, (r.ms / 1000).toFixed(1) + "s");
+  const meta = r.mode === "entry" ? (note || L().by(r.parsed._engine, (r.parsed._ms / 1000).toFixed(1) + "s") + (r.refining ? " · " + L().checking : "")) : L().by(r.engine, (r.ms / 1000).toFixed(1) + "s");
   const stt = r.stt_ms ? ` · whisper ${(r.stt_ms / 1000).toFixed(1)}s` : "";
   let body;
   if (r.mode === "entry") {
@@ -243,7 +247,8 @@ function show(r, note = "") {
     const rows = (r.rows || []).map(row => `<tr>${row.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
     const acts = (r.actions || []).map((a, i) => `<button class="btn" data-act="${i}">${a.type === "remind" ? L().remind : L().order}</button>`).join("")
       + (r.customer_id ? `<button class="btn link" data-open="${r.customer_id}">${L().openCust} →</button>` : "");
-    body = `<div class="a">${esc(r.answer)}</div>${rows ? `<table><tbody>${rows}</tbody></table>` : ""}${acts ? `<div class="acts">${acts}</div>` : ""}`;
+    const head = r.head && rows ? `<thead><tr>${r.head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>` : "";
+    body = `<div class="a">${esc(r.answer)}</div>${r.curve && (r.limit || r.curve[0][1] < 0.6) ? ladder(r.curve, r.limit, ((r.trace || []).find(t => t.step === "credit_limit") || {}).engine) : ""}${rows && !r.curve ? `<table>${head}<tbody>${rows}</tbody></table>` : ""}${acts ? `<div class="acts">${acts}</div>` : ""}${traceHtml(r.trace)}`;
   }
   $("#reply").innerHTML = `<div class="reply${note ? " flash" : ""}"><div class="q"><span>${esc(r.text)}</span><span class="${note ? "fix" : ""}">${meta}${stt}</span></div>${body}</div>`;
   if (r.mode === "entry") {
@@ -256,18 +261,64 @@ function show(r, note = "") {
     $$("#reply [data-open]").forEach(b => b.onclick = () => openCust(+b.dataset.open));
   }
 }
-/* Gemma re-reads every entry in the background and quietly fixes it if the fast parse was wrong. */
+/* The agent's trace: which tools ran, on which engine, how long each took. */
+function engineShort(e) { return !e ? "" : /TabPFN-3\.5/.test(e) ? "TabPFN-3.5" : /TabPFN/.test(e) ? "TabPFN (local)" : /fallback|boosting/.test(e) ? "baseline model" : e; }
+function traceHtml(t) {
+  if (!t || !t.length) return "";
+  const steps = t.map(s => {
+    const fmt = (k, v) => k === "days" ? `${v} ${lang === "mr" ? "दिवस" : "days"}` : k === "amount" ? inr(v) : String(v);
+    const args = s.args ? Object.entries(s.args).filter(([, v]) => v !== "" && v != null).map(([k, v]) => esc(fmt(k, v))).join(", ") : "";
+    const name = s.step === "plan" ? L().plan : esc(s.step.replace(/_/g, " "));
+    return `<li><span class="tn">${name}${args ? `<i>(${args})</i>` : ""}</span><span class="te">${esc(engineShort(s.engine === "rules" ? "rules" : s.engine))} · ${s.ms} ms</span></li>`;
+  }).join("");
+  return `<details class="trace"><summary>${L().trace} · ${t.length - 1} ${t.length - 1 === 1 ? "tool" : "tools"}</summary><ol>${steps}</ol></details>`;
+}
+/* Credit-limit ladder: TabPFN's late-payment risk as more udhaar is given. */
+function ladder(curve, limit, engine) {
+  const mx = Math.max(...curve.map(c => c[0])) || 1, X = g => g / mx * 100, Y = p => 100 - p * 100;
+  const d = curve.map((c, i) => `${i ? "L" : "M"}${X(c[0]).toFixed(2)} ${Y(c[1]).toFixed(2)}`).join("");
+  const band = (v, cls) => `<div class="lv ${cls}" style="top:${Y(v)}%"><span>${v * 100}%</span></div>`;
+  const lim = limit != null && limit > 0 ? `<div class="lim" style="left:${X(Math.min(limit, mx))}%"><span>${L().limitLbl(inr(limit))}</span></div>` : "";
+  const ticks = [0, .5, 1].map(f => `<span style="left:${f * 100}%">+${inr(Math.round(mx * f / 50) * 50)}</span>`).join("");
+  return `<div class="ladder"><div class="plot">${band(0.6, "hi")}${band(0.35, "wa")}${lim}
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${d}L100 100L0 100Z" class="fill"/><path d="${d}" class="ln"/></svg></div>
+    <div class="ax">${ticks}</div><div class="cap">${esc(engineShort(engine) || "TabPFN")}: ${L().ladderCap}</div></div>`;
+}
+/* After every entry: TabPFN checks the price, then Gemma re-reads the line and quietly fixes it if needed. */
 async function pollRefine(r) {
-  const job = r.refine, t0 = Date.now();
+  const job = r.refine, t0 = Date.now(); let priced = false;
   while (Date.now() - t0 < 30000) {
-    await new Promise(res => setTimeout(res, 800));
+    await new Promise(res => setTimeout(res, 700));
     let j; try { j = await api(`/api/refine/${job}`); } catch { return; }
-    if (j.status !== "done") continue;
     if (!$("#reply .reply") || r._gone) return;
-    if (j.changed) { show({ ...r, parsed: { ...j.parsed, _engine: j.engine }, ids: j.ids, refine: null }, L().corrected(j.engine)); refresh(); }
-    else { const m = $("#reply .q span:last-child"); if (m && j.engine !== "rules") { m.textContent = L().confirmed(j.engine); m.className = "ok"; } }
+    if (j.checked && !priced) { priced = true; priceNote(r, j.check); }
+    if (j.status !== "done") continue;
+    if (j.changed) { show({ ...r, parsed: { ...j.parsed, _engine: j.engine }, ids: j.ids, refine: null, refining: false }, L().corrected(j.engine)); priceNote({ ...r, ids: j.ids, parsed: j.parsed }, j.check); refresh(); }
+    else { const m = $("#reply .q span:last-child"); if (m) { m.textContent = j.engine !== "rules" ? L().confirmed(j.engine) : m.textContent.replace(" · " + L().checking, ""); if (j.engine !== "rules") m.className = "ok"; } }
     return;
   }
+}
+function priceNote(r, c) {
+  const box = $("#reply .reply"); if (!box || !c) return;
+  box.querySelector(".price")?.remove();
+  const el = document.createElement("div");
+  if (!c.odd) { el.className = "price ok"; el.textContent = `${L().priceOk} · ${engineShort(c.engine)}`; box.appendChild(el); return; }
+  el.className = "price odd";
+  const unit = ((r.parsed.items || []).find(i => i.name === c.item) || {}).unit || "";
+  el.innerHTML = `<span>${esc(L().priceOdd(inr(c.amount), itemName(c.item), c.qty + (unit ? " " + unit : ""), inr(c.expected)))} <i>${esc(engineShort(c.engine))}</i></span>
+    <span class="acts"><button class="btn primary" id="pfix">${L().priceFix(inr(c.expected))}</button><button class="btn link" id="pkeep">${L().priceKeep}</button></span>`;
+  box.appendChild(el);
+  $("#pkeep").onclick = () => el.remove();
+  $("#pfix").onclick = async () => {
+    const p = JSON.parse(JSON.stringify(r.parsed)); delete p._engine; delete p._ms;
+    const it = (p.items || []).find(i => i.name === c.item);
+    if (it && it.amount) { p.total = (p.total || 0) - it.amount + c.expected; it.amount = c.expected; } else p.total = c.expected;
+    await Promise.all(r.ids.map(id => api(`/api/entries/${id}`, { method: "DELETE" })));
+    const s = await post("/api/entries", { parsed: p, raw_text: r.text });
+    r.ids = s.ids; r.parsed = { ...p, _engine: r.parsed._engine, _ms: r.parsed._ms };
+    const big = $("#reply .big"); if (big) big.textContent = inr(p.total);
+    el.className = "price ok"; el.textContent = L().fixed + " ✓"; toast(L().fixed); refresh();
+  };
 }
 function act(a) { if (!a) return; a.type === "remind" ? remind(a.customer, a.due) : draftOrder(); }
 
@@ -363,8 +414,9 @@ async function openCust(id, sw = true) {
   if (sw) go("customers");
   S.sel = id; renderPeople();
   $("#detail").innerHTML = `<div class="skel"></div><div class="skel"></div>`;
-  try { S.cust = await api(`/api/customer/${id}`); } catch { S.cust = null; }
-  renderDetail();
+  let c; try { c = await api(`/api/customer/${id}`); } catch { c = null; }
+  if (S.sel !== id) return;                      // a later click won the race
+  S.cust = c; renderDetail();
 }
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; };
 function reasons(r) {
@@ -405,6 +457,7 @@ function renderDetail() {
     ${r ? `<div class="risk"><div>${ring(r.risk, col)}<span>${L().chance}</span></div>
       <div class="why"><h3>${L().why}</h3><ul>${reasons(r).map(([k, s]) => `<li class="${k}">${esc(s)}</li>`).join("")}</ul><div class="note">${L().whyNote}</div></div></div>` : ""}
     <div class="facts"><div>${L().facts[0]}<b>${inr(c.credit_total)}</b></div><div>${L().facts[1]}<b>${inr(c.paid_total)}</b></div><div>${L().facts[2]}<b>${num(c.n_entries)}</b></div></div>
+    ${c.due > 0 ? `<div class="sect lim-sect"><h2>${L().limitT}</h2><div id="limSlot"><div class="skel"></div></div></div>` : ""}
     ${c.due > 0 ? `<div class="d-actions"><button class="btn primary" id="remBtn"><svg viewBox="0 0 24 24"><path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/></svg>${L().remind}</button></div>` : ""}
     <div class="sect"><h2>${L().balance}</h2>${line({ pts, xl, color: col })}</div>
     <div class="sect"><h2>${L().history}</h2><ul class="hist">${c.entries.slice(0, 12).map(e => `<li>
@@ -412,6 +465,11 @@ function renderDetail() {
       <span class="amt ${e.kind}">${e.kind === "payment" ? "+" : ""}${inr(e.amount)}</span></li>`).join("")}</ul></div>`;
   requestAnimationFrame(() => requestAnimationFrame(() => $$("#detail .ring .val").forEach(el => el.style.strokeDashoffset = el.dataset.off)));
   const rb = $("#remBtn"); if (rb) rb.onclick = () => remind(c.name, c.due);
+  if (c.due > 0) api(`/api/limit/${c.id}?lang=${lang}`).then(l => {
+    const slot = $("#limSlot"); if (!slot || S.cust !== c) return;
+    const flat = !l.curve || (!l.limit && l.curve[0][1] >= 0.6);   // "collect first": the ladder adds nothing
+    slot.innerHTML = !flat ? `<p class="lim-a">${esc(l.answer)}</p>${ladder(l.curve, l.limit, l.engine)}` : `<p class="lim-a">${esc(l.answer || "")}</p>`;
+  }).catch(() => { const slot = $("#limSlot"); if (slot) slot.closest(".sect").remove(); });
 }
 
 /* ---------------- forecast ---------------- */

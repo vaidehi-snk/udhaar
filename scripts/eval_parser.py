@@ -112,16 +112,25 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--global-only", action="store_true", help="skip the 18 Indian lines")
+    ap.add_argument("--rules-only", action="store_true", help="skip Gemma (used by CI)")
+    ap.add_argument("--markdown", action="store_true", help="print a Markdown table (for the CI summary)")
     a = ap.parse_args()
     groups = ({} if a.global_only else {"India (mr/hi/en)": CASES}) | GLOBAL | {"Held-out (es/fil/id)": HELDOUT}
-    try:  # load the model into memory first, so a cold start isn't scored as a miss
-        print("warming up", parser.MODEL, "…")
-        parser.parse_with_gemma("ek kilo sakhar 46", timeout=180)
-    except Exception:
-        pass
-    print(f"{'':22} {'rules':>8}   {parser.MODEL:>10}")
+    if not a.rules_only:
+        try:  # load the model into memory first, so a cold start isn't scored as a miss
+            print("warming up", parser.MODEL, "…")
+            parser.parse_with_gemma("ek kilo sakhar 46", timeout=180)
+        except Exception:
+            pass
+    if a.markdown:
+        print("| Lines | Rules, fully correct |\n|---|---|")
+    else:
+        print(f"{'':22} {'rules':>8}   {parser.MODEL:>10}")
     for name, cases in groups.items():
         r = score(parser.parse_with_rules, cases)
-        g = score(parser.parse_with_gemma, cases)
-        print(f"{name:22} {r['all']:>8}   {(g or {}).get('all', 'offline'):>10}"
+        g = None if a.rules_only else score(parser.parse_with_gemma, cases)
+        if a.markdown:
+            print(f"| {name} | {r['all']} |")
+            continue
+        print(f"{name:22} {r['all']:>8}   {(g or {}).get('all', 'skipped' if a.rules_only else 'offline'):>10}"
               + (f"   (gemma median {g['median_ms']} ms)" if g else ""))

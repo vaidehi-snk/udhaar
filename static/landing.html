@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B0D12">
+<meta name="color-scheme" content="dark">
+<title>Udhaar: the corner shop's credit book</title>
+<meta name="description" content="Udhaar turns what a corner shopkeeper says into a credit ledger, and tells them who to collect from, what to stock and how much more credit is safe. Runs on the shop's own laptop with open models.">
+<meta property="og:title" content="Udhaar: the corner shop's credit book, with open AI">
+<meta property="og:description" content="Fiado, utang, hutang, udhaar. Speak entries, ask questions, get a morning briefing. Gemma, Whisper and TabPFN, on the shop's own laptop.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23F7C35F'/%3E%3Cstop offset='1' stop-color='%23FF7A59'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M10 9v8a6 6 0 0 0 12 0V9' fill='none' stroke='%230B0D12' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+@font-face{font-family:Geist;font-weight:400;font-display:swap;src:url(/static/fonts/geist-sans-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:Geist;font-weight:500;font-display:swap;src:url(/static/fonts/geist-sans-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:Geist;font-weight:600;font-display:swap;src:url(/static/fonts/geist-sans-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:Deva;font-weight:400;font-display:swap;src:url(/static/fonts/mukta-devanagari-400-normal.woff2) format("woff2");unicode-range:U+0900-097F,U+20B9}
+@font-face{font-family:Deva;font-weight:600;font-display:swap;src:url(/static/fonts/mukta-devanagari-600-normal.woff2) format("woff2");unicode-range:U+0900-097F,U+20B9}
+@font-face{font-family:Hand;font-display:swap;src:url(/static/fonts/kalam-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:Hand;font-display:swap;src:url(/static/fonts/kalam-devanagari-400-normal.woff2) format("woff2");unicode-range:U+0900-097F}
+
+:root{
+  --bg:#0B0D12; --panel:#11141B; --panel-2:#171B24; --line:#222837; --line-2:#2F3648;
+  --ink:#ECEEF4; --ink-2:#A2A9BA; --ink-3:#737A8E;
+  --brand:#F7C35F; --brand-2:#FF7A59; --accent:#3DD6A3; --risk:#FF6B6B;
+  /* the khata itself */
+  --paper:#F3ECD6; --rule:#A9BEDF; --margin:#D4574F; --pen:#22318C;
+  --font:Geist,Deva,"Segoe UI",system-ui,sans-serif; --ease:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);color-scheme:dark;scroll-behavior:smooth}
+body{font:16px/1.6 var(--font);color:var(--ink);-webkit-font-smoothing:antialiased;
+  background:radial-gradient(1100px 600px at 85% -10%,#F7C35F12,transparent 60%),var(--bg)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--brand);outline-offset:3px;border-radius:6px}
+svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand),var(--brand-2))}
+.logo svg{width:22px;height:22px;stroke:#0B0D12;stroke-width:3.2}
+.wordmark{font-weight:600;font-size:19px;letter-spacing:-.03em}
+.top nav{display:flex;align-items:center;gap:26px;font-size:14.5px;color:var(--ink-2)}
+.top nav a{text-decoration:none}.top nav a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:12px;font-weight:500;font-size:15px;text-decoration:none;border:1px solid var(--line-2);color:var(--ink);background:var(--panel-2);transition:border-color .2s,transform .2s var(--ease)}
+.btn:hover{border-color:#47506a}
+.btn.primary{border:0;color:#14100A;background:linear-gradient(135deg,var(--brand),var(--brand-2));box-shadow:0 10px 30px -12px #FF7A59aa}
+.btn.primary:hover{transform:translateY(-1px)}
+.top .btn{height:38px;padding:0 16px;font-size:14px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center;padding:40px 0 88px}
+.words{display:flex;flex-wrap:wrap;gap:4px 18px;font-family:Hand,cursive;font-size:22px;color:var(--brand);margin-bottom:18px}
+.words span:nth-child(2){color:#FFB38A}.words span:nth-child(3){color:#9FD8C4}.words span:nth-child(4){color:#C9D2FF}
+h1{font-size:clamp(40px,5.2vw,64px);line-height:1.02;letter-spacing:-.045em;font-weight:600;max-width:12ch}
+.lede{margin-top:22px;font-size:18.5px;line-height:1.6;color:var(--ink-2);max-width:34em}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.fine{margin-top:16px;font-size:13.5px;color:var(--ink-3)}
+
+/* the notebook → ledger moment */
+.scene{position:relative;display:grid}
+.page{position:relative;width:min(100%,470px);background:var(--paper);color:var(--pen);border-radius:4px 10px 10px 4px;
+  padding:26px 22px 26px 72px;transform:rotate(-2.2deg);box-shadow:0 30px 60px -25px #000c,0 2px 0 #d8cfb4 inset;
+  background-image:repeating-linear-gradient(to bottom,transparent 0 41px,var(--rule) 41px 42px);background-position:0 30px}
+.page::before{content:"";position:absolute;left:60px;top:0;bottom:0;width:2px;background:var(--margin);opacity:.8}
+.page::after{content:"";position:absolute;left:0;top:0;bottom:0;width:16px;border-radius:4px 0 0 4px;background:linear-gradient(90deg,#00000022,transparent)}
+.page .head{font-family:Hand,cursive;font-size:17px;color:#7a6a48;height:42px;line-height:42px}
+.page ol{list-style:none}
+.page li{font-family:Hand,cursive;font-size:19.5px;line-height:42px;height:42px;white-space:nowrap;position:relative}
+.page li .ink{display:inline-block;clip-path:inset(0 100% 0 0)}
+.page li.on .ink{clip-path:inset(0 0 0 0);transition:clip-path 1s steps(26,end)}
+.page li .d{position:absolute;left:-66px;width:48px;text-align:right;font-size:14px;color:#9a8a68}
+.page li.read::after{content:"";position:absolute;left:-6px;right:-10px;top:9px;bottom:7px;border-radius:6px;background:#F7C35F55;animation:mark 1.4s var(--ease) forwards;z-index:-1}
+@keyframes mark{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+.ledger{position:relative;z-index:1;justify-self:end;margin-top:-34px;width:min(88%,420px);background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line-2);border-radius:16px;padding:16px 16px 8px;box-shadow:0 40px 80px -30px #000}
+.ledger .lh{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-3);padding:0 2px 10px;border-bottom:1px solid var(--line)}
+.row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 2px;border-bottom:1px solid var(--line);opacity:0;transform:translateY(8px)}
+.row:last-child{border-bottom:0}
+.row.on{opacity:1;transform:none;transition:opacity .45s var(--ease),transform .45s var(--ease)}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;color:#0B0D12}
+.row b{font-weight:500;font-size:14.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row small{font-size:12.5px;color:var(--ink-3);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden}
+.tag{font-size:11.5px;padding:1px 7px;border-radius:6px;font-weight:500}
+.tag.credit{background:#FF6B6B1f;color:var(--risk)}.tag.pay{background:#3DD6A31f;color:var(--accent)}
+.amt{font-variant-numeric:tabular-nums;font-weight:500;font-size:15px;text-align:right}
+.amt.pay{color:var(--accent)}
+
+/* sections */
+section{padding:88px 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(28px,3.4vw,40px);line-height:1.12;letter-spacing:-.035em;font-weight:600;max-width:20ch}
+.intro{color:var(--ink-2);font-size:17.5px;max-width:38em;margin-top:14px}
+.feat{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:48px;align-items:center;padding:44px 0;border-bottom:1px solid var(--line)}
+.feat:last-child{border-bottom:0;padding-bottom:0}
+.feat h3{font-size:23px;letter-spacing:-.025em;font-weight:600;line-height:1.25}
+.feat p{color:var(--ink-2);margin-top:10px;max-width:30em}
+.feat .say{font-family:Hand,cursive;color:var(--brand);font-size:19px;margin-top:14px;line-height:1.5}
+.ui{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line-2);border-radius:16px;padding:18px 20px}
+.ui .q{font-size:13px;color:var(--ink-3);display:flex;justify-content:space-between;gap:12px;margin-bottom:8px}
+.ui .a{font-size:16.5px;line-height:1.5}
+.ui .entry{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ui .entry .big{margin-left:auto;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.chip{font-size:12.5px;border:1px solid var(--line-2);border-radius:7px;padding:2px 8px;color:var(--ink-2)}
+.warn{margin-top:14px;background:#F7C35F14;border:1px solid #F7C35F55;border-radius:10px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;font-size:14px}
+.warn .fix{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#14100A;border-radius:9px;padding:5px 12px;font-weight:500;font-size:13.5px}
+.lad{margin-top:14px;position:relative;height:96px;border-left:1px solid var(--line-2);border-bottom:1px solid var(--line-2);margin-right:34px}
+.lad svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lad .ln{stroke:var(--brand);stroke-width:2;vector-effect:non-scaling-stroke}
+.lad .lv{position:absolute;left:0;right:0;border-top:1px dashed;font-size:11px}
+.lad .lv span{position:absolute;right:-34px;top:-8px}
+.lad .lim{position:absolute;top:0;bottom:0;border-left:1.5px solid var(--accent)}
+.lad .lim span{position:absolute;left:6px;top:-2px;font-size:11.5px;color:var(--accent);white-space:nowrap}
+.trace{margin-top:16px;font-size:12.5px;color:var(--ink-3);border-left:1px solid var(--line-2);padding-left:14px;display:grid;gap:4px}
+.trace div{display:flex;justify-content:space-between;gap:10px}
+.brief{display:grid;gap:4px}
+.brief .k{font-size:12.5px;color:var(--risk);font-weight:500;display:flex;gap:6px;align-items:center}
+.brief .t{font-size:17px;font-weight:500;margin-top:4px}
+.brief .b{color:var(--ink-2);font-size:14.5px}
+.names{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+
+/* privacy */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:40px}
+.col{border:1px solid var(--line);border-radius:16px;padding:24px;background:var(--panel)}
+.col h3{font-size:17px;font-weight:600;display:flex;gap:10px;align-items:center}
+.col h3 svg{width:20px;height:20px}
+.col ul{list-style:none;margin-top:14px;display:grid;gap:12px;color:var(--ink-2);font-size:15px}
+.col li b{color:var(--ink);font-weight:500}
+.col.stay h3{color:var(--accent)} .col.leave h3{color:var(--brand)}
+
+/* evidence */
+.proof{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:40px}
+.p{padding:24px 0;border-top:2px solid var(--line-2)}
+.p .n{font-size:44px;font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+.p .n s{text-decoration:none;color:var(--ink-3);font-size:24px;font-weight:500;margin-left:10px}
+.p h3{font-size:16px;font-weight:500;margin-top:14px}
+.p p{color:var(--ink-3);font-size:14px;margin-top:6px}
+.note{margin-top:22px;font-size:13.5px;color:var(--ink-3);max-width:44em}
+
+/* stack */
+.stack{margin-top:36px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.stack div{padding:22px;border-right:1px solid var(--line);background:var(--panel)}
+.stack div:last-child{border-right:0}
+.stack b{display:block;font-weight:600;font-size:16px}
+.stack i{font-style:normal;font-size:12.5px;color:var(--accent)}
+.stack p{color:var(--ink-2);font-size:14px;margin-top:8px}
+
+.end{padding-top:96px;padding-bottom:96px}
+.end h2{max-width:22ch}
+footer{border-top:1px solid var(--line);padding:28px 0 40px;color:var(--ink-3);font-size:13.5px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
+
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr;gap:40px;padding:28px 0 72px}
+  .page{width:100%;max-width:470px}
+  .ledger{width:94%;max-width:440px}
+  .feat{grid-template-columns:1fr;gap:22px}
+  .split,.proof{grid-template-columns:1fr}
+  .stack{grid-template-columns:1fr 1fr}.stack div:nth-child(2){border-right:0}.stack div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .top nav a:not(.btn){display:none}
+}
+@media (max-width:520px){
+  .wrap{padding:0 16px}
+  .page{padding-left:58px}.page::before{left:50px}.page li{font-size:17px}.page li .d{left:-54px;width:40px;font-size:12.5px}
+  .stack{grid-template-columns:1fr}.stack div{border-right:0;border-bottom:1px solid var(--line)}
+  section{padding:64px 0}
+}
+@media (prefers-reduced-motion:reduce){
+  .page li .ink{clip-path:none!important;transition:none!important}.row{opacity:1;transform:none;transition:none!important}.page li.read::after{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/" aria-label="Udhaar home"><span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 9v8a6 6 0 0 0 12 0V9"/></svg></span><span class="wordmark">udhaar</span></a>
+    <nav>
+      <a href="#counter">What it does</a>
+      <a href="#private">Privacy</a>
+      <a href="https://github.com/vaidehi-snk/udhaar">Code</a>
+      <a class="btn" href="/app">Try the sample shop</a>
+    </nav>
+  </header>
+
+  <main class="hero">
+    <div>
+      <div class="words" aria-label="The same word in four countries"><span>fiado</span><span>utang</span><span>hutang</span><span>udhaar</span></div>
+      <h1>The credit book behind every corner-shop counter.</h1>
+      <p class="lede">Shopkeepers say an entry the way they'd write it, in their own language. Udhaar keeps the ledger, tells them who to collect from and what to stock before the festival, and how much more credit is safe to give. It runs on the shop's own laptop, on open models.</p>
+      <div class="cta">
+        <a class="btn primary" href="/app">Try the sample shop</a>
+        <a class="btn" href="https://github.com/vaidehi-snk/udhaar">Run it on your laptop</a>
+      </div>
+      <p class="fine">The online demo is a sample shop with 13 months of history. Type into it; on the shop's laptop you can speak.</p>
+    </div>
+
+    <div class="scene" aria-label="Handwritten notebook lines becoming ledger entries">
+      <div class="page">
+        <div class="head">Shree Ganesh Kirana, khata</div>
+        <ol id="lines">
+          <li><span class="d">12/10</span><span class="ink">Patil kaku – 2 kg sakhar, 1 l tel – 210</span></li>
+          <li><span class="d">12/10</span><span class="ink">शर्मा जी ५०० जमा</span></li>
+          <li><span class="d">12/10</span><span class="ink">Doña Rosa – azúcar 2 kg – 96 fiado</span></li>
+          <li><span class="d">13/10</span><span class="ink">Aling Nena – bigas, itlog – 85 utang</span></li>
+          <li><span class="d">13/10</span><span class="ink">Bu Sri bayar 50 ribu</span></li>
+        </ol>
+      </div>
+      <div class="ledger" role="list">
+        <div class="lh"><span>Ledger</span><span>written instantly</span></div>
+        <div class="row" role="listitem"><span class="av" style="background:#C9A7FF">PK</span><span><b>Patil Kaku</b><small><span class="tag credit">Udhaar</span>sugar 2 kg, oil 1 l</small></span><span class="amt">₹210</span></div>
+        <div class="row" role="listitem"><span class="av" style="background:#F7C35F">SJ</span><span><b>Sharma Ji</b><small><span class="tag pay">Paid back</span>Hindi</small></span><span class="amt pay">+₹500</span></div>
+        <div class="row" role="listitem"><span class="av" style="background:#7FD1F7">DR</span><span><b>Doña Rosa</b><small><span class="tag credit">Fiado</span>sugar 2 kg, Spanish</small></span><span class="amt">$96</span></div>
+        <div class="row" role="listitem"><span class="av" style="background:#3DD6A3">AN</span><span><b>Aling Nena</b><small><span class="tag credit">Utang</span>rice, eggs, Filipino</small></span><span class="amt">₱85</span></div>
+        <div class="row" role="listitem"><span class="av" style="background:#FF9C7A">BS</span><span><b>Bu Sri</b><small><span class="tag pay">Paid back</span>Indonesian</small></span><span class="amt pay">+Rp 50.000</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<section id="counter">
+  <div class="wrap">
+    <h2>What it does at the counter</h2>
+    <p class="intro">One box. Say or type a line and it's written down; ask a question and the answer comes from the shop's own records. The model decides what you asked. The numbers always come from the ledger and TabPFN.</p>
+
+    <div class="feat">
+      <div>
+        <h3>Say it the way you'd write it</h3>
+        <p>Marathi, Hindi, English, Spanish, Filipino or Indonesian, or the mix people actually speak. The entry is written in under a millisecond, and Gemma re-reads it in the background to fix anything the fast pass got wrong.</p>
+        <p class="say">"Patil kaku, don kilo sakhar ani ek litre tel, 210 udhaar"</p>
+      </div>
+      <div class="ui">
+        <div class="q"><span>Patil kaku, don kilo sakhar ani ek litre tel, 210 udhaar</span><span style="color:var(--accent)">Checked by gemma3:4b ✓</span></div>
+        <div class="entry"><span class="av" style="background:#C9A7FF">PK</span><b>Patil Kaku</b><span class="tag credit">Udhaar</span><span class="chip">sugar · 2 kg</span><span class="chip">oil · 1 l</span><span class="big">₹210</span></div>
+      </div>
+    </div>
+
+    <div class="feat">
+      <div>
+        <h3>Ask what the notebook can't tell you</h3>
+        <p>How much more credit is safe for a customer? TabPFN tests a ladder of amounts against their repayment history in one call, and the limit stops where their chance of paying late crosses the line. Every answer shows how it got there.</p>
+        <p class="say">"Shinde mama la ajun kiti udhaar deu?"</p>
+      </div>
+      <div class="ui">
+        <div class="q"><span>How much more udhaar can I give Shinde Mama?</span></div>
+        <div class="a">Safe to give Shinde Mama up to ₹4,750 more. He owes ₹2,633 now; the most he has paid back in a month is ₹7,402.</div>
+        <div class="lad">
+          <div class="lv" style="top:40%;border-color:var(--risk);color:var(--risk)"><span>60%</span></div>
+          <div class="lv" style="top:65%;border-color:var(--brand);color:var(--brand)"><span>35%</span></div>
+          <div class="lim" style="left:71%"><span>limit ₹4,750</span></div>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none"><path class="ln" d="M0 98 L10 96 L20 90 L30 86 L40 84 L50 82 L60 80 L66 78 L72 64 L80 52 L90 44 L100 38"/></svg>
+        </div>
+        <div class="trace"><div><span>plan</span><span>rules · 1 ms</span></div><div><span>credit limit (Shinde Mama)</span><span>TabPFN-3.5</span></div></div>
+      </div>
+    </div>
+
+    <div class="feat">
+      <div>
+        <h3>Catch the extra zero</h3>
+        <p>Every entry is checked against what this shop usually charges for that item and quantity. In a credit book, a misheard "920" is a neighbour being asked for money they never borrowed.</p>
+      </div>
+      <div class="ui">
+        <div class="entry"><span class="av" style="background:#C9A7FF">PK</span><b>Patil Kaku</b><span class="tag credit">Udhaar</span><span class="chip">sugar · 2 kg</span><span class="big">₹920</span></div>
+        <div class="warn"><span>₹920 for 2 kg sugar? This shop usually charges about ₹92.</span><span class="fix">Change to ₹92</span></div>
+      </div>
+    </div>
+
+    <div class="feat">
+      <div>
+        <h3>Start the day knowing who to call</h3>
+        <p>A short briefing every morning: who is likely to pay late and why, what to order before the next festival, and how yesterday went. One tap drafts a polite WhatsApp reminder in the customer's own language.</p>
+      </div>
+      <div class="ui brief">
+        <span class="k"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M12 3v18M16.5 7.5c0-1.9-2-3-4.5-3s-4.5 1.1-4.5 3 2 2.6 4.5 3.2 4.5 1.3 4.5 3.3-2 3.3-4.5 3.3-4.5-1.2-4.5-3"/></svg>Collect</span>
+        <span class="t">Collect ₹28,270 from 3 customers</span>
+        <span class="b">Start with Bhosale Dada: ₹11,396 due, nothing paid in 35 days. Usually pays every 43.</span>
+        <div class="names"><span class="chip">Bhosale Dada</span><span class="chip">More Kaka</span><span class="chip">Jadhav Bhau</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="private">
+  <div class="wrap">
+    <h2>A list of who owes money stays with the shop</h2>
+    <p class="intro">Speech, the language model and the ledger run on the shop's laptop. It keeps working when the internet drops, and an entry costs nothing but electricity.</p>
+    <div class="split">
+      <div class="col stay">
+        <h3><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Never leaves the laptop</h3>
+        <ul>
+          <li><b>The voice recording.</b> Transcribed by Whisper on the laptop, then deleted.</li>
+          <li><b>Names, phone numbers and amounts.</b> One SQLite file the shopkeeper owns.</li>
+          <li><b>Understanding sentences.</b> Gemma 3 runs in Ollama, offline.</li>
+        </ul>
+      </div>
+      <div class="col leave">
+        <h3><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>Can leave, only if you allow it</h3>
+        <ul>
+          <li><b>Anonymous numbers for TabPFN-3.5:</b> amounts, day counts, weekdays. No names, no items.</li>
+          <li><b>Nothing at all</b> with TabPFN's open weights installed locally.</li>
+          <li><b>Reminders and orders</b> are sent by the shopkeeper, from their own WhatsApp.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="wrap">
+    <h2>Tested on weeks it never saw</h2>
+    <p class="intro">We hid the future and asked each model to predict it, against the way shopkeepers decide today.</p>
+    <div class="proof">
+      <div class="p"><div class="n">20%<s>vs 27%</s></div><h3>Festival stock forecast error</h3><p>TabPFN against the usual 4-week average, in the Ganesh Chaturthi build-up. Lower is better.</p></div>
+      <div class="p"><div class="n">0.82<s>vs 0.67</s></div><h3>Spotting late payers (AUC)</h3><p>TabPFN against the "hasn't paid in a month" rule every owner already uses.</p></div>
+      <div class="p"><div class="n">7/9<s>vs 5/9</s></div><h3>Entries read correctly abroad</h3><p>Gemma 3 4B against hand-written rules, on Spanish, Filipino and Indonesian lines never used for tuning.</p></div>
+    </div>
+    <p class="note">Forecast and risk numbers come from 13 months of sample shop history built to mirror a real kirana: weekends, salary week, festival build-ups and customers with different habits. A real shop's khata is exactly the data nobody should publish.</p>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <h2>Built on open models</h2>
+    <div class="stack">
+      <div><b>Gemma 3 4B</b><i>on the laptop</i><p>Re-reads every entry, plans which tools answer a question, writes reminders in six languages.</p></div>
+      <div><b>faster-whisper</b><i>on the laptop</i><p>Turns the shopkeeper's voice into text, GPU or CPU.</p></div>
+      <div><b>TabPFN</b><i>numbers only, or local</i><p>Late-payment risk, credit limits, what-ifs, price checks and the festival forecast.</p></div>
+      <div><b>SQLite</b><i>on the laptop</i><p>The khata itself. Every number in every answer comes from here.</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap end">
+  <h2>Open the sample shop and ask it something.</h2>
+  <p class="intro">Try "Who owes the most?", "How much more udhaar can I give Shinde Mama?" or "Doña Rosa, dos kilos de azúcar, 96 fiado".</p>
+  <div class="cta"><a class="btn primary" href="/app">Try the sample shop</a><a class="btn" href="https://github.com/vaidehi-snk/udhaar">Read the code</a></div>
+</div>
+
+<footer><div class="wrap"><span>Udhaar, made in Aurangabad for Hacktoberfest 2026. MIT licensed.</span><a href="https://github.com/vaidehi-snk/udhaar">github.com/vaidehi-snk/udhaar</a></div></footer>
+
+<script>
+/* One moment on load: each handwritten line is "read", then appears in the ledger. */
+(() => {
+  const lines = [...document.querySelectorAll("#lines li")], rows = [...document.querySelectorAll(".ledger .row")];
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { lines.forEach(l => l.classList.add("on")); rows.forEach(r => r.classList.add("on")); return; }
+  let i = 0;
+  const step = () => {
+    if (i >= lines.length) return;
+    const l = lines[i], r = rows[i];
+    l.classList.add("on");
+    setTimeout(() => { l.classList.add("read"); r.classList.add("on"); }, 1050);
+    i++; setTimeout(step, 1500);
+  };
+  setTimeout(step, 450);
+})();
+</script>
+</body>
+</html>

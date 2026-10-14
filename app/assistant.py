@@ -12,8 +12,9 @@ from datetime import date, datetime, timedelta
 
 import httpx
 
-from . import db, parser
+from . import db, parser, predict, tracing
 import os
+import time
 
 CUR = os.environ.get("UDHAAR_CURRENCY", "₹")
 
@@ -26,25 +27,35 @@ QUESTION_WORDS = {
     "berapa", "siapa", "apa", "kapan", "tunjukkan", "lihat",                                         # id
 }
 INTENTS = ["customer_due", "customer_history", "top_due", "risky", "item_forecast", "item_sales",
-           "order_plan", "sales_summary", "help"]
+           "order_plan", "sales_summary", "credit_limit", "what_if", "help"]
 PERIODS = ["today", "yesterday", "week", "month"]
 
-Q_SCHEMA = {
+STEP = {
     "type": "object",
     "properties": {
         "intent": {"type": "string", "enum": INTENTS},
         "customer": {"type": ["string", "null"]},
         "item": {"type": ["string", "null"]},
         "period": {"type": ["string", "null"], "enum": PERIODS + [None]},
+        "amount": {"type": ["number", "null"]},
+        "days": {"type": ["integer", "null"]},
     },
-    "required": ["intent", "customer", "item", "period"],
+    "required": ["intent", "customer", "item", "period", "amount", "days"],
 }
+# The agent's plan: up to three tool calls. Gemma picks the tools; the tools compute the numbers.
+Q_SCHEMA = {"type": "object", "properties": {"steps": {"type": "array", "items": STEP, "minItems": 1, "maxItems": 3}},
+            "required": ["steps"]}
 Q_SYSTEM = """You route questions from a small shopkeeper (Marathi, Hindi, English, Spanish, Filipino or Indonesian, often mixed) to one intent.
 customer_due: how much a named person owes. customer_history: what a named person took or paid.
 top_due: who owes the most. risky: who may not pay back. item_forecast: how much of an item will be needed / to order.
 item_sales: how much of an item was sold. order_plan: what to order from the wholesaler.
-sales_summary: cash, udhaar, collection totals for a period. help: anything else.
-item in simple English (sakhar/azúcar/asukal/gula->sugar, tel/aceite/mantika/minyak->oil). period: today, yesterday, week or month. JSON only."""
+sales_summary: cash, udhaar, collection totals for a period.
+credit_limit: how much more udhaar can safely be given to a named person (or whether to give more at all).
+what_if: how a named person's risk changes if they pay nothing for `days` days and/or take `amount` more on udhaar.
+help: anything else.
+Plan 1 to 3 steps. Use several steps only when the question really asks several things.
+item in simple English (sakhar/azúcar/asukal/gula->sugar, tel/aceite/mantika/minyak->oil). period: today, yesterday, week or month.
+Never answer the question yourself: only choose the steps. JSON only."""
 
 
 # ---------------------------------------------------------------- routing
@@ -91,9 +102,44 @@ def _period_in(toks: list[str]) -> str | None:
     return None
 
 
+IF_WORDS = {"if", "agar", "jar", "jari", "si", "kung", "kalau", "kalo", "suppose", "maan", "samjha"}
+MORE_WORDS = {"more", "aur", "ajun", "aajun", "anakhi", "mas", "pa", "lagi", "tambah", "extra", "limit", "safe"}
+GIVE_WORDS = {"give", "de", "du", "deu", "dyu", "dena", "deta", "du", "sakta", "sakte", "sakti", "fiar", "fio", "fiarle",
+              "dar", "pautangin", "ipautang", "kasih", "beri", "kasbon", "credit", "udhaar", "udhar", "utang", "fiado",
+              "hutang", "bon", "limit"}
+DAY_WORDS = {"day": 1, "days": 1, "din": 1, "dinon": 1, "divas": 1, "dia": 1, "dias": 1, "araw": 1, "hari": 1,
+             "week": 7, "weeks": 7, "hafte": 7, "hafta": 7, "athavde": 7, "athavda": 7, "aathavde": 7, "semana": 7,
+             "semanas": 7, "linggo": 7, "minggu": 7, "month": 30, "months": 30, "mahina": 30, "mahine": 30,
+             "mahinyat": 30, "mes": 30, "meses": 30, "buwan": 30, "bulan": 30}
+
+
+def _scenario_in(toks: list[str]) -> tuple[int, float]:
+    """'2 weeks' -> 14 days; any other number >= 10 is extra udhaar."""
+    days, extra = 0, 0.0
+    for i, t in enumerate(toks):
+        n = parser._numval(t)
+        n = n if n is not None else parser.NUM_WORDS.get(t)
+        if t in DAY_WORDS and (i == 0 or (parser._numval(toks[i - 1]) is None and toks[i - 1] not in parser.NUM_WORDS)):
+            days = max(days, DAY_WORDS[t] if DAY_WORDS[t] == 30 else 0)
+        if n is None:
+            continue
+        nxt = toks[i + 1] if i + 1 < len(toks) else ""
+        if nxt in DAY_WORDS:
+            days = max(days, int(n * DAY_WORDS[nxt]))
+        elif n >= 10:
+            extra = max(extra, float(n))
+    return days, extra
+
+
 def route_with_rules(text: str) -> dict:
     toks = set(_tokens(text))
     item, period = _item_in(text), _period_in(list(toks))
+    if toks & IF_WORDS:
+        days, extra = _scenario_in(_tokens(text))
+        if days or extra:
+            return {"intent": "what_if", "customer": text, "item": None, "period": None, "amount": extra, "days": days}
+    if toks & MORE_WORDS and toks & GIVE_WORDS and not item:
+        return {"intent": "credit_limit", "customer": text, "item": None, "period": None, "amount": None, "days": None}
     who = {"who", "kaun", "kon", "konala", "kuni", "konakade", "quien", "quienes", "sino", "siapa"} & toks
     if who and toks & {"late", "risk", "dhoka", "nahi", "denge", "bharnar", "pay", "pays",
                        "no", "pagara", "pagaran", "hindi", "magbabayad", "tidak", "bayar", "telat"}:
@@ -112,21 +158,32 @@ def route_with_rules(text: str) -> dict:
         intent = "sales_summary"
     else:
         intent = "customer_due"  # resolved below; falls back to help if no customer found
-    return {"intent": intent, "customer": text, "item": item, "period": period}
+    return {"intent": intent, "customer": text, "item": item, "period": period, "amount": None, "days": None}
 
 
-def route_with_gemma(text: str) -> dict:
+def _shot(steps: list[dict]) -> str:
+    base = {"customer": None, "item": None, "period": None, "amount": None, "days": None}
+    return json.dumps({"steps": [base | st for st in steps]})
+
+
+def plan_with_gemma(text: str) -> list[dict]:
     r = httpx.post(f"{parser.OLLAMA_URL}/api/chat", timeout=20, json={
         "model": parser.MODEL, "stream": False, "format": Q_SCHEMA, "options": parser.OPTS,
         "keep_alive": "30m",
         "messages": [{"role": "system", "content": Q_SYSTEM},
                      {"role": "user", "content": "Patil kaku kitna baki hai?"},
-                     {"role": "assistant", "content": json.dumps({"intent": "customer_due", "customer": "Patil Kaku", "item": None, "period": None})},
+                     {"role": "assistant", "content": _shot([{"intent": "customer_due", "customer": "Patil Kaku"}])},
                      {"role": "user", "content": "pudhchya athavdyat kiti sakhar lagel"},
-                     {"role": "assistant", "content": json.dumps({"intent": "item_forecast", "customer": None, "item": "sugar", "period": "week"})},
+                     {"role": "assistant", "content": _shot([{"intent": "item_forecast", "item": "sugar", "period": "week"}])},
+                     {"role": "user", "content": "Shinde mama is asking for more udhaar for Diwali, should I give it? how much does he owe?"},
+                     {"role": "assistant", "content": _shot([{"intent": "customer_due", "customer": "Shinde Mama"},
+                                                             {"intent": "credit_limit", "customer": "Shinde Mama"}])},
+                     {"role": "user", "content": "what should I do before the festival"},
+                     {"role": "assistant", "content": _shot([{"intent": "order_plan"}, {"intent": "risky"}])},
                      {"role": "user", "content": text}]})
     r.raise_for_status()
-    return json.loads(r.json()["message"]["content"])
+    steps = json.loads(r.json()["message"]["content"]).get("steps") or []
+    return [st for st in steps if st.get("intent") in INTENTS][:3] or [{"intent": "help"}]
 
 
 def resolve_customer(con, spoken: str | None) -> dict | None:
@@ -165,28 +222,24 @@ def _period_range(con, period: str | None) -> tuple[str, str, str]:
     return end.isoformat(), end.isoformat(), "today"
 
 
-def answer(text: str, insights: dict, lang: str = "en", use_gemma: bool = False) -> dict:
-    """Fast path first: rules understand the common phrasings in under a millisecond.
-    Only when they can't (intent comes out as "help") do we pay for a Gemma call."""
-    t0 = datetime.now()
-    if use_gemma:
-        try:
-            q, engine = route_with_gemma(text), parser.MODEL
-        except Exception:
-            q, engine = route_with_rules(text), "rules"
-    else:
-        q, engine = route_with_rules(text), "rules"
+def _run_step(q: dict, text: str, insights: dict, lang: str) -> dict:
+    """Execute one tool. Every number in the result comes from SQLite or TabPFN."""
     mr = lang == "mr"
-    out = {"question": text, "intent": q.get("intent"), "engine": engine, "rows": [], "actions": []}
+    out = {"intent": q.get("intent"), "engine": "SQLite", "rows": [], "actions": []}
     with db.connect() as con:
         cust = resolve_customer(con, q.get("customer"))
         intent = q.get("intent")
-        if engine == "rules" and cust and intent in ("sales_summary", "help", "customer_due"):
+        if cust and q.get("_rules") and intent in ("sales_summary", "help", "customer_due"):
             hist = {"liya", "ghetla", "ghetle", "history", "entries", "nondi", "kya", "kay"} & set(_tokens(text))
             intent = "customer_history" if hist else "customer_due"
-        if intent in ("customer_due", "customer_history") and not cust:
+        if intent in ("customer_due", "customer_history", "credit_limit", "what_if") and not cust:
             intent = "help"
         out["intent"] = intent
+        out["_cust"] = cust["name"] if cust else None
+        if intent in ("risky",):
+            out["engine"] = insights.get("risk", {}).get("engine")
+        elif intent in ("item_forecast", "order_plan"):
+            out["engine"] = insights.get("restock", {}).get("engine")
         bal = {b["id"]: b for b in db.balances(con)}
         risk = {c["customer"]: c for c in (insights.get("risk", {}).get("customers") or [])}
 
@@ -265,15 +318,127 @@ def answer(text: str, insights: dict, lang: str = "en", use_gemma: bool = False)
             out["answer"] = (f"रोख {CUR}{r['cash']:,.0f}, उधार {CUR}{r['credit']:,.0f}, वसूल {CUR}{r['paid']:,.0f}." if mr else
                              f"{label.capitalize()}: {CUR}{r['cash']:,.0f} cash sales, {CUR}{r['credit']:,.0f} given on udhaar, {CUR}{r['paid']:,.0f} collected.")
 
+        elif intent == "credit_limit":
+            L = predict.credit_limit(cust["name"])
+            out["engine"] = (L or {}).get("engine")
+            if not L:
+                out["answer"] = (f"{cust['name']} यांच्याकडे सध्या उधार नाही." if mr else f"{cust['name']} has no open udhaar to judge from.")
+            else:
+                n, p = L["customer"], round(L["risk_now"] * 100)
+                if L["verdict"] == "collect":
+                    out["answer"] = (f"आधी वसूल करा. {n} यांच्याकडे {CUR}{L['due']:,} बाकी, उशिरा भरण्याची शक्यता {p}%. काही भरेपर्यंत अजून उधार नको." if mr else
+                                     f"Collect first. {n} owes {CUR}{L['due']:,} and is {p}% likely to pay late. Hold more udhaar until they pay something.")
+                    out["actions"].append({"type": "remind", "customer": n, "due": L["due"]})
+                elif L["verdict"] == "full":
+                    out["answer"] = (f"सध्या नको. {n} यांच्याकडे {CUR}{L['due']:,} बाकी — त्यांनी एका महिन्यात भरलेल्या सर्वात जास्त रकमेइतके ({CUR}{L['capacity']:,})." if mr else
+                                     f"Not right now. {n} owes {CUR}{L['due']:,}, about the most they have ever paid back in a month ({CUR}{L['capacity']:,}).")
+                else:
+                    why = ((f"त्यापलीकडे उशिरा भरण्याची शक्यता {round(L['line']*100)}% च्या वर जाते." if mr else
+                            f"Beyond that, their chance of paying late goes over {round(L['line']*100)}%.") if L["binding"] == "risk" else
+                           (f"त्यांनी एका महिन्यात जास्तीत जास्त {CUR}{L['capacity']:,} भरले आहेत." if mr else
+                            f"The most they have paid back in a month is {CUR}{L['capacity']:,}."))
+                    head = ((f"थोडेच: {n} यांना अजून {CUR}{L['limit']:,} पर्यंत. ते आधीच लक्ष ठेवण्याच्या यादीत आहेत ({p}%)." if mr else
+                             f"Only a little: up to {CUR}{L['limit']:,} more for {n}. They are already on the watch list ({p}% chance of paying late).")
+                            if L["verdict"] == "small" else
+                            (f"{n} यांना अजून {CUR}{L['limit']:,} पर्यंत उधार देणे सुरक्षित आहे. आत्ता {CUR}{L['due']:,} बाकी." if mr else
+                             f"Safe to give {n} up to {CUR}{L['limit']:,} more. They owe {CUR}{L['due']:,} now."))
+                    out["answer"] = f"{head} {why}"
+                pts = L["curve"][:: max(1, len(L["curve"]) // 5)][:5]
+                out["rows"] = [[(("आत्ता" if mr else "As now") if not g else (f"+{CUR}{g:,} अजून" if mr else f"+{CUR}{g:,} more")),
+                                 f"{round(v*100)}%"] for g, v in pts]
+                out["head"] = ["Extra udhaar", "Chance of paying late"] if not mr else ["अजून उधार", "उशिरा भरण्याची शक्यता"]
+                out["curve"] = L["curve"]
+                out["limit"] = L["limit"]
+            out["customer_id"] = cust["id"]
+
+        elif intent == "what_if":
+            days, extra = int(q.get("days") or 0), float(q.get("amount") or 0)
+            W = predict.what_if(cust["name"], extra, days)
+            out["engine"] = (W or {}).get("engine")
+            if not W:
+                out["answer"] = (f"{cust['name']} यांच्याकडे सध्या उधार नाही." if mr else f"{cust['name']} has no open udhaar right now.")
+            else:
+                n, a_, b2 = W["customer"], round(W["now"] * 100), round(W["then"] * 100)
+                cond = (f"{days} दिवस काहीच भरले नाही" if days else "") + (" आणि " if days and extra else "") + (f"अजून {CUR}{extra:,.0f} घेतले" if extra else "")
+                cond_en = (f"pays nothing for {days} days" if days else "") + (" and " if days and extra else "") + (f"takes {CUR}{extra:,.0f} more" if extra else "")
+                if b2 == a_:
+                    out["answer"] = (f"{n} यांनी {cond} तरी उशिरा भरण्याची शक्यता {a_}% च राहील." if mr else
+                                     f"If {n} {cond_en}, their chance of paying late stays at {a_}%.")
+                else:
+                    out["answer"] = (f"{n} यांनी {cond} तर उशिरा भरण्याची शक्यता {a_}% वरून {b2}% होईल." if mr else
+                                     f"If {n} {cond_en}, their chance of paying late goes from {a_}% to {b2}%.")
+                if W["then"] >= predict.BAND_WATCH:
+                    out["actions"].append({"type": "remind", "customer": n, "due": W["due"]})
+            out["customer_id"] = cust["id"]
+
         else:
             out["answer"] = ("मी नोंद लिहू शकतो किंवा विचारू शकता: \"Patil kaku kiti baki?\", \"kon jast baki?\", \"pudhchya athavdyat kiti sakhar?\"" if mr else
                              "I can write an entry, or answer things like “how much does Patil Kaku owe?”, “who owes the most?”, “how much sugar next week?”.")
-    if out["intent"] == "help" and not use_gemma:
+    return out
+
+
+ADVICE_WORDS = {"should", "worth", "suggest", "advice", "advise", "plan", "karu", "karun", "karaycha", "chahiye",
+                "deu", "dyava", "dyave", "debo", "deberia", "conviene", "dapat", "sebaiknya", "harus"}
+JOIN_WORDS = {"and", "also", "ani", "aani", "aur", "va", "y", "tambien", "at", "saka", "dan", "juga"}
+
+
+def needs_planner(text: str) -> bool:
+    """Compound or advice-style questions go to Gemma's planner; one-liners stay on the instant rules."""
+    toks = _tokens(text)
+    return (text.count("?") > 1 or len(toks) >= 12 or bool(set(toks) & ADVICE_WORDS)
+            or (bool(set(toks) & JOIN_WORDS) and sum(t in QUESTION_WORDS for t in toks) >= 2))
+
+
+def answer(text: str, insights: dict, lang: str = "en", use_gemma: bool | None = None) -> dict:
+    """A small agent. Step 1 plans (rules in under a millisecond; Gemma for the long tail and
+    for questions that need several tools). Step 2 runs each tool: SQL for the ledger, TabPFN
+    for risk, credit limits, what-ifs and forecasts. The trace of both is returned to the UI."""
+    t0 = time.perf_counter()
+    trace = []
+    first = use_gemma is None
+    if use_gemma is None:
+        use_gemma = needs_planner(text)
+    if use_gemma:
+        try:
+            with tracing.span("gen_ai.invoke_agent", "plan", model=parser.MODEL):
+                plan, engine = plan_with_gemma(text), parser.MODEL
+        except Exception:
+            plan, engine = [route_with_rules(text) | {"_rules": True}], "rules"
+    else:
+        plan, engine = [route_with_rules(text) | {"_rules": True}], "rules"
+    trace.append({"step": "plan", "engine": engine, "ms": round((time.perf_counter() - t0) * 1000),
+                  "tools": [st.get("intent") for st in plan]})
+    parts = []
+    for st in plan:
+        t1 = time.perf_counter()
+        with tracing.span("gen_ai.execute_tool", st.get("intent") or "help", tool=st.get("intent")):
+            part = _run_step(st, text, insights, lang)
+        args = {k: st[k] for k in ("customer", "item", "period", "amount", "days")
+                if st.get(k) not in (None, "", 0) and not (k == "customer" and st.get("_rules"))}
+        if part.get("_cust"):
+            args["customer"] = part["_cust"]
+        trace.append({"step": part["intent"], "engine": part.get("engine") or "SQLite",
+                      "ms": round((time.perf_counter() - t1) * 1000), "args": {k: v for k, v in args.items() if v}})
+        parts.append(part)
+    useful = [p for p in parts if p["intent"] != "help"] or parts[:1]
+    if useful[0]["intent"] == "help" and not use_gemma and first:
         try:
             return answer(text, insights, lang, use_gemma=True)
         except Exception:
             pass
-    out["ms"] = round((datetime.now() - t0).total_seconds() * 1000)
+    out = {"question": text, "intent": useful[0]["intent"] if len(useful) == 1 else "plan",
+           "engine": engine, "answer": " ".join(p["answer"] for p in useful),
+           "rows": next((p["rows"] for p in useful if p["rows"]), []),
+           "head": next((p.get("head") for p in useful if p["rows"]), None),
+           "curve": next((p.get("curve") for p in useful if p.get("curve")), None),
+           "limit": next((p.get("limit") for p in useful if p.get("curve")), None),
+           "actions": [], "trace": trace,
+           "customer_id": next((p["customer_id"] for p in useful if p.get("customer_id")), None)}
+    for p in useful:
+        for a_ in p["actions"]:
+            if a_ not in out["actions"]:
+                out["actions"].append(a_)
+    out["ms"] = round((time.perf_counter() - t0) * 1000)
     return out
 
 

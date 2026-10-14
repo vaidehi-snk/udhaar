@@ -10,4 +10,5 @@ cryptography>=42
 # Pick one TabPFN backend (both are tried automatically):
 tabpfn-client>=0.2   # TabPFN-3.5 via Prior Labs API — set TABPFN_TOKEN
 # tabpfn             # fully offline open weights (GPU recommended)
+sentry-sdk>=2.0        # optional: Sentry agent traces when SENTRY_DSN is set
 pytest>=8

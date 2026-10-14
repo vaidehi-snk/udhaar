@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 data/
 .pytest_cache/
+video/udhaar-demo.mp4
+video/_stage.html

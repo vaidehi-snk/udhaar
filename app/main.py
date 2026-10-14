@@ -19,10 +19,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import assistant, db, parser, predict
+from . import assistant, db, parser, predict, tracing
 
 ROOT = Path(__file__).resolve().parent.parent
 DEMO = os.environ.get("UDHAAR_DEMO") == "1"  # hosted demo: sample shop, no microphone pipeline
+tracing.init()   # optional: Sentry agent traces when SENTRY_DSN is set
 app = FastAPI(title="Udhaar")
 _cache: dict = {"key": None, "data": None}
 
@@ -90,28 +91,75 @@ def from_text(body: TextIn):
 _jobs: dict[str, dict] = {}
 
 
+def _price_candidates(parsed: dict) -> list[tuple]:
+    items = [i for i in (parsed.get("items") or []) if i.get("name") and i.get("qty")]
+    if parsed.get("kind") == "payment" or not items:
+        return []
+    if len(parsed.get("items") or []) == 1:          # one item: the spoken total is its price
+        i = items[0]
+        return [(i["name"], float(i["qty"]), float(i.get("amount") or parsed.get("total") or 0))]
+    return [(i["name"], float(i["qty"]), float(i["amount"])) for i in items if i.get("amount")]
+
+
+def _check_price(parsed: dict, ids: list[int]) -> dict | None:
+    """TabPFN sanity-checks the amount against what this shop usually charges."""
+    cands = _price_candidates(parsed)
+    if not cands:
+        return None
+    with db.connect() as con:
+        df = pd.read_sql_query("SELECT * FROM entries", con)
+    df = df[~df["id"].isin(ids)]
+    last = None
+    with tracing.span("gen_ai.execute_tool", "price_check", tool="price_check"):
+        for c in cands:
+            res = predict.price_check(df, *c)
+            if res and res["odd"]:
+                return res
+            last = res or last
+    return last
+
+
 def _refine(job: str, text: str, ids: list[int], first: dict, source: str):
     """Background: Gemma re-reads the line. If it understood it differently, swap the entry."""
     try:
-        better = parser.parse_with_gemma(text)
+        with tracing.span("gen_ai.chat", "refine entry", model=parser.MODEL):
+            better = parser.parse_with_gemma(text)
     except Exception:
-        _jobs[job] = {"status": "done", "changed": False, "engine": "rules"}
+        _jobs[job].update(status="done", changed=False, engine="rules")
         return
     same = {k: first.get(k) for k in ("kind", "customer", "items", "total")} == \
            {k: better.get(k) for k in ("kind", "customer", "items", "total")}
     if same:
-        _jobs[job] = {"status": "done", "changed": False, "engine": parser.MODEL}
+        _jobs[job].update(status="done", changed=False, engine=parser.MODEL)
         return
     with db.connect() as con:
         rows = con.execute(f"SELECT ts FROM entries WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()
         if len(rows) != len(ids):  # shopkeeper already undid or edited it
-            _jobs[job] = {"status": "done", "changed": False, "engine": parser.MODEL}
+            _jobs[job].update(status="done", changed=False, engine=parser.MODEL)
             return
         for i in ids:
             db.undo(con, i)
         new_ids = db.add_entries(con, better, text, source, ts=rows[0]["ts"])
     _cache["key"] = None
-    _jobs[job] = {"status": "done", "changed": True, "engine": parser.MODEL, "parsed": better, "ids": new_ids}
+    try:
+        check = _check_price(better, new_ids)
+    except Exception:
+        check = None
+    _jobs[job].update(status="done", changed=True, engine=parser.MODEL, parsed=better, ids=new_ids, check=check)
+
+
+def _after_write(job: str, text: str, ids: list[int], parsed: dict, source: str, refine: bool):
+    """Background, so the counter never waits: (1) TabPFN price check, (2) Gemma re-read."""
+    try:
+        _jobs[job]["check"] = _check_price(parsed, ids)
+    except Exception as e:
+        print(f"[udhaar] price check skipped: {e!r}")
+        _jobs[job]["check"] = None
+    _jobs[job]["checked"] = True
+    if refine:
+        _refine(job, text, ids, parsed, source)
+    else:
+        _jobs[job].update(status="done", changed=False, engine="rules")
 
 
 def _route(text: str, lang: str, source: str) -> dict:
@@ -124,12 +172,11 @@ def _route(text: str, lang: str, source: str) -> dict:
     parsed = parser.parse_with_rules(text)
     parsed.update(_engine="rules", _ms=round((time.perf_counter() - t0) * 1000))
     ids = _commit(parsed, text, source)
-    job = None
-    if DEMO is False and os.environ.get("UDHAAR_NO_REFINE") != "1":
-        job = uuid.uuid4().hex[:12]
-        _jobs[job] = {"status": "running"}
-        threading.Thread(target=_refine, args=(job, text, ids, parsed, source), daemon=True).start()
-    return {"mode": "entry", "text": text, "parsed": parsed, "ids": ids, "refine": job}
+    refine = DEMO is False and os.environ.get("UDHAAR_NO_REFINE") != "1"
+    job = uuid.uuid4().hex[:12]
+    _jobs[job] = {"status": "running", "refining": refine}
+    threading.Thread(target=_after_write, args=(job, text, ids, parsed, source, refine), daemon=True).start()
+    return {"mode": "entry", "text": text, "parsed": parsed, "ids": ids, "refine": job, "refining": refine}
 
 
 @app.get("/api/refine/{job}")
@@ -139,7 +186,8 @@ def refine_status(job: str):
 
 @app.post("/api/ask")
 def ask(body: AskIn):
-    return _route(body.text.strip(), body.lang, "typed")
+    with tracing.span("gen_ai.invoke_agent", "udhaar"):
+        return _route(body.text.strip(), body.lang, "typed")
 
 
 @app.get("/api/brief")
@@ -254,6 +302,19 @@ def customer(cid: int):
             "paid_total": round(sum(r["amount"] for r in rows if r["kind"] == "payment"))}
 
 
+@app.get("/api/limit/{cid}")
+def limit(cid: int, lang: str = "en"):
+    """Credit-limit tool for one customer (the same tool the agent calls)."""
+    with db.connect() as con:
+        c = con.execute("SELECT name FROM customers WHERE id=?", (cid,)).fetchone()
+    if not c:
+        raise HTTPException(404, "No such customer")
+    insights()
+    with tracing.span("gen_ai.execute_tool", "credit_limit", tool="credit_limit"):
+        r = assistant._run_step({"intent": "credit_limit", "customer": c["name"]}, c["name"], insights(), lang)
+    return {k: r.get(k) for k in ("answer", "curve", "limit", "engine")}
+
+
 @app.get("/api/summary")
 def summary(weeks: int = 10):
     with db.connect() as con:
@@ -326,5 +387,10 @@ app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
 
 @app.get("/")
+def home():
+    return FileResponse(ROOT / "static" / "landing.html")
+
+
+@app.get("/app")
 def index():
     return FileResponse(ROOT / "static" / "index.html")

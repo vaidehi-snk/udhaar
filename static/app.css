@@ -347,3 +347,37 @@ dialog .row{display:flex;justify-content:flex-end;gap:8px}
   .facts{grid-template-columns:1fr 1fr}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* agent trace, credit ladder, price check */
+.reply thead th{font-size:11.5px;font-weight:500;color:var(--ink-3);text-align:left;padding:0 0 4px}
+.reply thead th:not(:first-child){text-align:right}
+.ladder{margin:16px 0 4px;padding-right:34px}
+.ladder .plot{position:relative;height:110px;border-left:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.ladder svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.ladder .ln{fill:none;stroke:var(--brand);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.ladder .fill{fill:var(--brand);opacity:.08}
+.ladder .lv{position:absolute;left:0;right:0;border-top:1px dashed;opacity:.75}
+.ladder .lv span{position:absolute;right:-34px;top:-8px;font-size:11px}
+.ladder .lv.hi{border-color:var(--risk);color:var(--risk)} .ladder .lv.wa{border-color:var(--warn);color:var(--warn)}
+.ladder .lim{position:absolute;top:0;bottom:0;border-left:1.5px solid var(--accent)}
+.ladder .lim span{position:absolute;top:-2px;left:6px;font-size:11.5px;color:var(--accent);white-space:nowrap;background:var(--panel);padding:0 4px;border-radius:4px}
+.ladder .ax{position:relative;height:18px;font-size:11px;color:var(--ink-3)}
+.ladder .ax span{position:absolute;top:4px;transform:translateX(-50%);white-space:nowrap}
+.ladder .ax span:first-child{transform:none} .ladder .ax span:last-child{transform:translateX(-100%)}
+.ladder .cap{font-size:11.5px;color:var(--ink-3);margin-top:4px}
+.trace{margin-top:12px;font-size:12.5px;color:var(--ink-3)}
+.trace summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px}
+.trace summary::-webkit-details-marker{display:none}
+.trace summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .2s var(--ease)}
+.trace[open] summary::before{transform:rotate(45deg)}
+.trace ol{margin:8px 0 0;padding:0;list-style:none;counter-reset:t;border-left:1px solid var(--line-2);margin-left:3px}
+.trace li{counter-increment:t;display:flex;justify-content:space-between;gap:12px;padding:4px 0 4px 14px;position:relative}
+.trace li::before{content:"";position:absolute;left:-4px;top:10px;width:7px;height:7px;border-radius:50%;background:var(--panel);border:1.5px solid var(--brand)}
+.trace .tn{color:var(--ink-2)} .trace .tn i{font-style:normal;color:var(--ink-3);margin-left:4px}
+.trace .te{white-space:nowrap;font-variant-numeric:tabular-nums}
+.price{margin-top:12px;font-size:13.5px;padding:10px 12px;border-radius:10px;animation:rise .3s var(--ease)}
+.price.ok{color:var(--accent);background:var(--accent-soft);display:inline-block;padding:5px 10px;font-size:12.5px}
+.price.odd{background:var(--warn-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.price.odd i{font-style:normal;color:var(--ink-3);font-size:12px;margin-left:4px}
+.price.odd .acts{margin:0}
+.lim-sect .lim-a{margin:0 0 4px;font-size:15px;line-height:1.5;color:var(--ink)}

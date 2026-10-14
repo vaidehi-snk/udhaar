@@ -36,6 +36,14 @@ Ask a question, and it answers from the shop's own records:
 > *"Bhosale dada kiti baki?"* → Bhosale Dada owes ₹11,396. Last paid on 9 Sep. Chance of paying late: 99%.
 > *"How much sugar next week?"* → About 43 kg (usually 61). In the two weeks before Diwali: 154 kg, +27%.
 
+And it answers the question every shopkeeper actually agonises over, which no notebook can:
+
+> *"How much more udhaar can I give Shinde Mama?"* → Safe to give up to ₹4,750 more. The most he has ever paid back in a month is ₹7,402. [FILL: use the numbers your own run shows]
+> *"Bhosale dada ko aur udhaar de sakte?"* → Collect first. He owes ₹11,396 and is 99% likely to pay late.
+> *"What if Gaikwad Sir doesn't pay for 3 weeks?"* → His chance of paying late goes from X% to Y%.
+
+Every entry also gets a quiet **price check**. If the mic hears *"920"* for two kilos of sugar, Udhaar asks: *"₹920 for 2 kg sugar? This shop usually charges about ₹92."* One tap fixes it. In a credit book, a wrong extra zero is someone's neighbour being asked for ₹828 they never borrowed.
+
 Every morning it hands the owner a three-line **briefing**:
 
 - who to collect from today, and why;
@@ -48,32 +56,39 @@ Every risk score comes with its reasons in plain words, such as *"No payment in 
 
 [FILL: screenshots of Today, a customer page and the Forecast page, from `docs/`]
 
-{% embed [FILL: 60–90s demo video. Speak one entry, ask one question, show the briefing, tap "Draft reminder"] %}
+{% embed [FILL: the demo video from `python video/record.py`, uploaded to YouTube] %}
 
-## Why open models make this a business
+## Who pays, and why open models are what make it a business
 
-I priced Udhaar at **₹149/month** [FILL: or whatever your shopkeeper said]. A kirana shop makes thin margins, and that number only works if the AI costs me nothing per entry. A busy shop logs 150–300 entries a day. Paying per API call would eat the subscription.
+**Who pays:** the owner of a corner shop with 50–300 customers on credit. I priced it at **₹149/month** [FILL: or what your shopkeeper said]: less than one customer's monthly sugar. The sample shop has ₹37,000 out on udhaar. If the briefing gets one late account collected a week sooner, or stops one extra zero, the month is paid for.
 
-Open models change all three of the things that matter here:
+That price only works if the AI costs me nothing per entry. A busy counter logs 150–300 lines a day, and every line goes through speech-to-text, a language model and a price check. So:
 
-- **Cost:** Whisper and Gemma 3 4B run on my everyday laptop, an i5 with an RTX 2050 and 4 GB of VRAM. The marginal cost of an entry is electricity.
-- **Privacy:** A khata is a list of who in the neighbourhood owes money. It shouldn't live on a server the shopkeeper has never heard of. With Udhaar the ledger is one SQLite file on the shop's laptop, and speech and parsing never leave it.
-- **Works when the internet doesn't:** The shop's connection drops every time it rains. Udhaar doesn't care.
+- **Cost.** Whisper and Gemma 3 4B run on my everyday laptop: an i5 with an RTX 2050 and 4 GB of VRAM. An entry costs electricity. With a per-call API, the AI bill would grow with every customer, and a ₹149 subscription would be underwater at a busy shop.
+- **Privacy.** A khata is a list of which neighbours owe money. It shouldn't live on a server the shopkeeper has never heard of. The ledger is one SQLite file on the shop's laptop, and speech and parsing never leave it.
+- **It works when the internet doesn't.** The shop's connection drops every time it rains. Udhaar doesn't notice.
 
-For TabPFN, I use Prior Labs' **TabPFN-3.5 API** for the best accuracy. It only ever sees anonymous numbers like *due amount, days since last payment, day-of-week, days to festival*. No names, no items. If a shop wants zero network, the same code falls back to TabPFN's **open weights running locally**.
+### Where open actually beat closed
+
+The reason I didn't expect: **because Gemma is free to run, I can run it twice.** Every entry is written instantly by fast rules, then Gemma re-reads the same line in the background and quietly corrects it if it disagrees. With a paid API I'd never design that, because I'd be paying to re-check every entry. With a local model, a second opinion on every line costs nothing, and it's what makes the counter both fast *and* accurate.
+
+The second: **I could measure and swap.** I ran the same eval on Gemma 3 1B and 4B on my own GPU, saw the 1B was worse than my regex rules, and made the trade-off myself (below). I also constrain Gemma's output with a JSON schema through Ollama, so it can never return anything but a valid entry.
+
+Where closed would win, honestly: a frontier API would probably parse my held-out Spanish/Filipino/Indonesian lines better, and faster than my laptop does. For the predictions I *do* use Prior Labs' hosted **TabPFN-3.5**, because it's more accurate. It only ever sees anonymous numbers like *due amount, days since last payment, day-of-week, days to festival*: no names, no items. A shop that wants zero network can switch to TabPFN's **open weights running locally** with the same code.
 
 ## How it works
 
 ```
- speak / type ─► faster-whisper ─► Gemma 3 4B (Ollama): entry or question?
-                                     │                       │
-                         entry (JSON schema)         question → intent (JSON schema)
-                                     ▼                       ▼
-                                SQLite khata ◄──── SQL + TabPFN compute the answer
-                                     │
-                     TabPFN classifier → who will pay late
-                     TabPFN regressor  → festival-aware order plan
-                     Gemma             → Marathi reminder, morning briefing
+ speak / type ─► faster-whisper ─► entry or question?
+                                      │                         │
+                        entry: rules now, Gemma re-reads    question: plan (rules, or Gemma
+                        in the background (JSON schema)     for compound ones) → 1–3 tools
+                                      │                         │
+                        TabPFN price check ("₹920?")        tools: SQL ledger · TabPFN risk ·
+                                      ▼                     credit limit · what-if · forecast
+                                 SQLite khata ◄─────────────────┘   (every number comes from here)
+
+        Gemma → WhatsApp reminder in the customer's language · morning briefing · wholesaler order
 ```
 
 **The model routes, the database answers.** For questions, Gemma only decides *what* is being asked: an intent such as "how much does X owe" or "forecast for item Y", plus the customer, item and period. The number in the answer always comes from a SQL query or a TabPFN prediction. Gemma can misunderstand a question, but it cannot invent a balance. For a tool that handles people's debts, I think that's the only acceptable design.
@@ -106,6 +121,16 @@ So Udhaar uses both. **The rules write the entry instantly** (under a millisecon
 **Who will pay late (TabPFN classifier).** There's no labelled dataset for "my neighbours' repayment habits", and a corner shop will never have enough data to train a model. That's exactly where TabPFN shines: it makes predictions from a few hundred rows with **no training step**. I replay the khata and take a snapshot of every open account each week. Each snapshot gets labelled by whether that person repaid at least half their dues within 30 days. TabPFN learns from roughly 700 of these snapshots in seconds and scores today's accounts.
 
 **What to stock (TabPFN regressor).** Kirana demand is all calendar: weekends, the first week of the month when salaries land, and the build-up to festivals. Each row is *(item, day-of-week, salary week, days-to-festival, recent 7- and 28-day averages, horizon)*. I predict every item × every day until Diwali in **one batched call** instead of looping. With the API, that kept the dashboard refresh to [FILL] seconds.
+
+### TabPFN inside a small prediction agent
+
+Questions go through a tiny agent loop: **plan, then call tools.** The planner is the instant rules for one-line questions, and Gemma for compound or advice-style ones (*"Shinde mama wants more for Diwali, should I? what does he owe?"* → `customer_due` + `credit_limit`). Gemma only picks the tools; it never writes a number. The tools are SQL and TabPFN:
+
+- **`credit_limit`**: the fitted risk model re-scores the customer on a ladder of *"what if I give ₹X more"*, all rungs in **one batched TabPFN call**. The limit is the tighter of two things: the last rung before their late-payment risk crosses 35%, and the most they have ever repaid within 30 days. A small prior keeps the ladder honest: giving someone *more* credit never makes them *safer*, so the curve is not allowed to dip.
+- **`what_if`**: the same model on a shifted snapshot: *21 more days with no payment*, or *₹2,000 more on udhaar*.
+- **`price_check`**: a TabPFN regressor learns price-per-unit from the shop's own last 2,000 entries (item, quantity, unit) and flags an amount that's more than 2.2× or under 0.45× what it expects. This is TabPFN as an anomaly detector, on the anomaly that matters most at a counter.
+
+Every answer has a **"How it got this"** trace under it: `plan · rules · 1 ms → credit limit (Shinde Mama) · TabPFN-3.5 · [FILL] ms`. A shopkeeper won't trust a number they can't argue with, and neither would I. [FILL if you set up Sentry: "The same spans go to Sentry's AI agent view:" + screenshot of one trace]
 
 ### Does it actually beat a guess?
 
@@ -140,7 +165,7 @@ The result is a card that says **"Diwali in 25 days"** with ghee, maida, besan a
 
 ## Try it
 
-**Live demo:** [FILL: https://udhaar.tech]. This is the sample shop with typed entries. The microphone version runs on the shop's own laptop, by design.
+**Live demo:** [FILL: https://udhaar.tech]. The home page explains it in one screen; **Try the sample shop** opens the app with typed entries. The microphone version runs on the shop's own laptop, by design.
 
 ```bash
 git clone https://github.com/vaidehi-snk/udhaar && cd udhaar
@@ -155,6 +180,13 @@ python scripts/make_demo_data.py && uvicorn app.main:app
 [FILL: 2–3 bullets from your user's requests.] Plus fine-tuning a small Whisper on real counter audio, because Marathi grocery words are where it still stumbles.
 
 ## Built with
-Gemma 3 · Ollama · faster-whisper · TabPFN-3.5 (Prior Labs) · FastAPI · SQLite
+- **Gemma 3 4B** (Ollama, local): entry parsing, the agent's planner, reminders in six languages
+- **TabPFN-3.5** (Prior Labs): late-payment risk, credit limits, what-ifs, price checks, festival forecast
+- **faster-whisper** (local) · FastAPI · SQLite
+- **Render** hosts the live demo's agent front end, deployed from `render.yaml`; **[FILL: udhaar.tech]** points at it
+- **GitHub Actions** runs the tests and re-scores the parser on every push, posting the table to the run summary
+- [FILL if used: **Sentry** AI-agent tracing for every question]
+
+Code: [github.com/vaidehi-snk/udhaar](https://github.com/vaidehi-snk/udhaar) (MIT licensed)
 
 [FILL: optional: DevRelay embed of your build session]
