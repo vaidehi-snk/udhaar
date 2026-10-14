@@ -156,12 +156,14 @@ def order(lang: str = "en"):
 @app.post("/api/voice")
 async def from_voice(audio: UploadFile = File(...), save: bool = True, lang: str = "en"):
     from . import stt  # imported lazily so the app starts even without faster-whisper
-    suffix = Path(audio.filename or "clip.webm").suffix or ".webm"
+    suffix = Path(audio.filename or "clip.wav").suffix or ".wav"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
         f.write(await audio.read())
         path = f.name
     try:
         heard = stt.transcribe(path)
+    except Exception as e:  # show the real reason in the app instead of a silent failure
+        raise HTTPException(500, str(e)[:300])
     finally:
         os.unlink(path)
     if not heard["text"]:
@@ -196,20 +198,40 @@ def ledger():
             "today": dict(today)}
 
 
-@app.get("/api/insights")
-def insights(refresh: bool = False):
+STALE_OK = float(os.environ.get("UDHAAR_INSIGHTS_TTL", "900"))  # seconds a forecast may lag the newest entries
+_lock = threading.Lock()
+
+
+def _compute(key):
     with db.connect() as con:
-        key = con.execute("SELECT COUNT(*), MAX(id) FROM entries").fetchone()
-        key = tuple(key)
-        if _cache["key"] == key and not refresh:
-            return _cache["data"]
         df = pd.read_sql_query("SELECT * FROM entries", con)
         names = {r["id"]: r["name"] for r in con.execute("SELECT id,name FROM customers")}
     t0 = time.perf_counter()
     data = {"restock": predict.restock_forecast(df), "risk": predict.udhaar_risk(df, names)}
     data["ms"] = round((time.perf_counter() - t0) * 1000)
-    _cache.update(key=key, data=data)
+    _cache.update(key=key, data=data, at=time.time(), busy=False)
     return data
+
+
+@app.get("/api/insights")
+def insights(refresh: bool = False):
+    """TabPFN forecasts and risk scores. One new entry barely moves a 13-month forecast, so
+    a recent result is served instantly and recomputed in the background (one at a time).
+    That keeps the counter fast and avoids a TabPFN API call per entry."""
+    with db.connect() as con:
+        key = tuple(con.execute("SELECT COUNT(*), MAX(id) FROM entries").fetchone())
+    data = _cache.get("data")
+    if data and not refresh:
+        if _cache["key"] != key and time.time() - _cache.get("at", 0) < STALE_OK:
+            with _lock:
+                if not _cache.get("busy"):
+                    _cache["busy"] = True
+                    threading.Thread(target=_compute, args=(key,), daemon=True).start()
+            return data
+        if _cache["key"] == key:
+            return data
+    with _lock:
+        return _compute(key)
 
 
 @app.get("/api/customer/{cid}")
@@ -271,10 +293,17 @@ REMINDER_TEMPLATES = {
 }
 
 
+_reminders: dict[tuple, dict] = {}
+
+
 @app.post("/api/reminder")
 def reminder(body: ReminderIn):
-    """Gemma drafts a polite WhatsApp reminder the shopkeeper can send in one tap."""
+    """Gemma drafts a polite WhatsApp reminder the shopkeeper can send in one tap.
+    Drafts are remembered for the session, so reopening the same reminder is instant."""
     lang = body.language.lower().replace("simple ", "")
+    key = (body.customer, round(body.due), lang)
+    if key in _reminders:
+        return _reminders[key]
     due = f"{round(body.due):,}"
     prompt = (f"Write a short, warm WhatsApp message in {lang} (native script) from the owner of a small "
               f"neighbourhood grocery shop to a regular customer, {body.customer}, gently reminding them that "
@@ -285,7 +314,9 @@ def reminder(body: ReminderIn):
             "model": parser.MODEL, "prompt": prompt, "stream": False,
             "options": {"temperature": 0.6, "num_ctx": parser.NUM_CTX, "num_predict": 200}, "keep_alive": "30m"})
         r.raise_for_status()
-        return {"text": r.json()["response"].strip(), "engine": parser.MODEL}
+        out = {"text": r.json()["response"].strip(), "engine": parser.MODEL}
+        _reminders[key] = out
+        return out
     except Exception:
         tpl = REMINDER_TEMPLATES.get(lang, REMINDER_TEMPLATES["english"])
         return {"text": tpl.format(n=body.customer, c=assistant.CUR, d=due), "engine": "template"}

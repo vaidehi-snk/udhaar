@@ -25,14 +25,14 @@ const T = {
     sub: (due, n) => `${due} is out on udhaar across ${n} customers.`,
     ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "Who owes the most?", "Doña Rosa, dos kilos de azúcar, 96 fiado", "How much sugar next week?", "Aling Nena, isang kilong bigas, 85 utang", "Bu Sri bayar 50 ribu", "Aaj ka hisab"],
     hintsK: "Try", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Doña Rosa, dos kilos de azúcar, 96 fiado", "Aling Nena isang kilong bigas 85 utang", "Pak Budi ngutang beras 2 kilo 30 ribu", "Who owes the most?", "How much sugar next week?", "What should I order?"],
-    listening: "Listening… tap again to stop", working: "Working…",
+    listening: "Listening… tap again to stop", tooShort: "That was too short. Tap, speak, then tap again.", working: "Working…",
     kind: { credit: "Udhaar", sale: "Cash sale", payment: "Paid back" }, band: { high: "Likely late", watch: "Watch", ok: "Reliable" },
     walkin: "Walk-in", written: "Written to the khata", checking: "Gemma checking…", corrected: e => `Corrected by ${e}`, confirmed: e => `Checked by ${e} ✓`, undo: "Undo", removed: "Removed",
     by: (e, ms) => `${e === "rules" ? "rules fallback" : e} · ${ms}`,
     remind: "Draft reminder", order: "Draft order", openCust: "Open",
     briefKind: { collect: "Collect", order: "Order", day: "Yesterday" },
     entries: n => `${n} shown`, accounts: n => `${n} accounts`,
-    noVoice: "Speaking works on the shop's laptop. In this demo, type instead.", micBlocked: "The browser blocked the microphone. Open Udhaar on localhost or with serve_https.py.",
+    noVoice: "This online demo has no microphone. Type instead; on the shop's laptop you can speak.", micBlocked: "The browser blocked the microphone. Open Udhaar on localhost or with serve_https.py.",
     owes: "owes", lastPaid: d => `last paid ${d} days ago`, chance: "chance they pay back less than half within 30 days",
     why: "Why", whyNote: "The signals TabPFN used, compared with this shop's other customers.",
     since: (d, g) => `No payment in ${d} days. Usually pays every ${g}.`, sinceOk: (d, g) => `Paid ${d} days ago. Usually pays every ${g}.`,
@@ -73,14 +73,14 @@ const T = {
     sub: (due, n) => `${n} ग्राहकांकडे एकूण ${due} उधार बाकी.`,
     ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "कोणाकडे सर्वात जास्त बाकी?", "Doña Rosa, dos kilos de azúcar, 96 fiado", "Pudhchya athavdyat kiti sakhar?", "Aling Nena, isang kilong bigas, 85 utang", "Aaj ka hisab"],
     hintsK: "उदा.", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Kon jast baki?", "Pudhchya athavdyat kiti sakhar?", "Kay mangvaycha?", "Aaj ka hisab"],
-    listening: "ऐकत आहे… थांबवण्यासाठी पुन्हा टॅप करा", working: "करत आहे…",
+    listening: "ऐकत आहे… थांबवण्यासाठी पुन्हा टॅप करा", tooShort: "खूपच लहान. टॅप करा, बोला, मग पुन्हा टॅप करा.", working: "करत आहे…",
     kind: { credit: "उधार", sale: "रोख", payment: "जमा" }, band: { high: "उशीर शक्य", watch: "लक्ष ठेवा", ok: "भरवशाचे" },
     walkin: "रोख ग्राहक", written: "खात्यात लिहिले", checking: "Gemma तपासत आहे…", corrected: e => `${e} ने दुरुस्त केले`, confirmed: e => `${e} ने तपासले ✓`, undo: "मागे घ्या", removed: "काढले",
     by: (e, ms) => `${e === "rules" ? "नियम पद्धत" : e} · ${ms}`,
     remind: "आठवण तयार करा", order: "ऑर्डर तयार करा", openCust: "उघडा",
     briefKind: { collect: "वसुली", order: "ऑर्डर", day: "काल" },
     entries: n => `${n} नोंदी`, accounts: n => `${n} खाती`,
-    noVoice: "बोलणे दुकानाच्या लॅपटॉपवर चालते. या डेमोमध्ये टाइप करा.", micBlocked: "ब्राउझरने माइक अडवला. localhost किंवा serve_https.py ने उघडा.",
+    noVoice: "या ऑनलाइन डेमोमध्ये माइक नाही. टाइप करा; दुकानाच्या लॅपटॉपवर बोलता येते.", micBlocked: "ब्राउझरने माइक अडवला. localhost किंवा serve_https.py ने उघडा.",
     owes: "बाकी", lastPaid: d => `शेवटचे ${d} दिवसांपूर्वी भरले`, chance: "३० दिवसांत अर्ध्यापेक्षा कमी भरण्याची शक्यता",
     why: "का?", whyNote: "TabPFN ने वापरलेले संकेत, दुकानाच्या इतर ग्राहकांशी तुलना करून.",
     since: (d, g) => `${d} दिवस काही भरले नाही. सहसा दर ${g} दिवसांनी भरतात.`, sinceOk: (d, g) => `${d} दिवसांपूर्वी भरले. सहसा दर ${g} दिवसांनी.`,
@@ -186,22 +186,47 @@ async function submit() {
   catch (e) { $("#reply").innerHTML = ""; toast(e.message); }
   finally { $("#goBtn").disabled = false; $("#cmdWrap").classList.remove("thinking"); }
 }
-let rec, chunks = [];
+/* Mic: record raw samples and send 16 kHz mono WAV. Whisper reads WAV directly, so no
+   audio-decoding library is needed on the laptop (that's where most setups break). */
+let rec = null;
+function wav16k(chunks, rate) {
+  const n = chunks.reduce((a, c) => a + c.length, 0), all = new Float32Array(n);
+  let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
+  const ratio = rate / 16000, len = Math.floor(n / ratio), pcm = new Int16Array(len);
+  for (let i = 0; i < len; i++) {                       // simple averaging downsample
+    const a = Math.floor(i * ratio), b = Math.min(n, Math.floor((i + 1) * ratio)); let sum = 0;
+    for (let j = a; j < b; j++) sum += all[j];
+    const v = Math.max(-1, Math.min(1, sum / Math.max(1, b - a))); pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2), d = new DataView(buf), str = (p, t) => [...t].forEach((ch, i) => d.setUint8(p + i, ch.charCodeAt(0)));
+  str(0, "RIFF"); d.setUint32(4, 36 + pcm.length * 2, true); str(8, "WAVE"); str(12, "fmt ");
+  d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true); d.setUint32(24, 16000, true);
+  d.setUint32(28, 32000, true); d.setUint16(32, 2, true); d.setUint16(34, 16, true); str(36, "data"); d.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Blob([buf], { type: "audio/wav" });
+}
+async function stopMic() {
+  const r = rec; rec = null; if (!r) return;
+  r.node.disconnect(); r.src.disconnect(); r.stream.getTracks().forEach(t => t.stop()); await r.ctx.close();
+  $("#mic").classList.remove("rec"); $("#cmdWrap").classList.remove("listening");
+  if (r.chunks.reduce((a, c) => a + c.length, 0) < r.rate * 0.4) { toast(L().tooShort); return; }
+  $("#cmdWrap").classList.add("thinking");
+  const fd = new FormData(); fd.append("audio", wav16k(r.chunks, r.rate), "clip.wav");
+  try { show(await api(`/api/voice?lang=${lang}`, { method: "POST", body: fd })); } catch (e) { $("#reply").innerHTML = ""; toast(e.message); }
+  finally { $("#cmdWrap").classList.remove("thinking"); }
+}
 $("#mic").onclick = async () => {
-  if (S.health && !S.health.whisper) { toast(L().noVoice); $("#q").focus(); return; }
-  if (rec && rec.state === "recording") { rec.stop(); return; }
+  if (S.health && S.health.demo) { toast(L().noVoice); $("#q").focus(); return; }   // hosted demo: no mic
+  if (rec) { stopMic(); return; }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    rec = new MediaRecorder(stream); chunks = [];
-    rec.ondataavailable = e => chunks.push(e.data);
-    rec.onstop = async () => {
-      stream.getTracks().forEach(x => x.stop()); $("#mic").classList.remove("rec");
-      $("#cmdWrap").classList.remove("listening"); $("#cmdWrap").classList.add("thinking");
-      const fd = new FormData(); fd.append("audio", new Blob(chunks, { type: rec.mimeType }), "clip.webm");
-      try { show(await api(`/api/voice?lang=${lang}`, { method: "POST", body: fd })); } catch (e) { $("#reply").innerHTML = ""; toast(e.message); }
-      finally { $("#cmdWrap").classList.remove("thinking"); }
-    };
-    rec.start(); $("#mic").classList.add("rec"); $("#cmdWrap").classList.add("listening"); $("#q").placeholder = L().listening;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1), chunks = [];
+    node.onaudioprocess = e => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    src.connect(node); node.connect(ctx.destination);
+    rec = { stream, ctx, src, node, chunks, rate: ctx.sampleRate };
+    $("#mic").classList.add("rec"); $("#cmdWrap").classList.add("listening"); $("#q").placeholder = L().listening;
+    setTimeout(() => { if (rec && rec.ctx === ctx) stopMic(); }, 20000);   // safety stop after 20 s
   } catch { toast(L().micBlocked); }
 };
 
