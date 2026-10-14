@@ -76,3 +76,22 @@ def test_ask_routes_entries_and_questions():
     b = c.get("/api/brief").json()
     assert {x["kind"] for x in b["cards"]} >= {"collect", "order"}
     assert "Hello" in c.get("/api/order").json()["text"]
+
+
+def test_global_corner_shops():
+    p = parser.parse_with_rules
+    r = p("Doña Rosa, dos kilos de azúcar y un aceite, apúntalo, 96 pesos")
+    assert (r["kind"], r["customer"], r["total"]) == ("credit", "Doña Rosa", 96)
+    assert {i["name"] for i in r["items"]} == {"sugar", "oil"}
+    r = p("Aling Nena, isang kilong bigas at dalawang itlog, 85 utang")
+    assert (r["kind"], r["customer"], r["total"]) == ("credit", "Aling Nena", 85)
+    r = p("Pak Budi ngutang beras 2 kilo dan minyak goreng 1 liter, 48.000")
+    assert r["total"] == 48000 and r["items"][0] == {"name": "rice", "qty": 2.0, "unit": "kg", "amount": None}
+    assert p("Bu Sri bayar 50 ribu")["total"] == 50000
+    assert p("Mas Andi lunas 120 ribu")["customer"] == "Mas Andi"       # 'andi' is also Marathi for eggs
+    assert p("don kilo sakhar 92 udhaar")["customer"] is None            # 'don' is also Marathi for two
+    c = TestClient(app)
+    assert c.post("/api/ask", json={"text": "¿Quién debe más?"}).json()["intent"] == "top_due"
+    assert c.post("/api/ask", json={"text": "Bu Sri bayar 50 ribu"}).json()["mode"] == "entry"
+    t = c.post("/api/reminder", json={"customer": "Aling Nena", "due": 85, "language": "filipino"}).json()["text"]
+    assert "Aling Nena" in t and "85" in t

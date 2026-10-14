@@ -8,6 +8,11 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const T = {
   en: {
     "nav.today": "Today", "nav.customers": "Customers", "nav.forecast": "Forecast", "nav.hood": "Under the hood",
+    "cust.kicker": "Credit accounts", "fc.kicker": "Stock plan · TabPFN", "hood.kicker": "Open models, one laptop",
+    kpi: { out: "Outstanding", outF: n => `across ${n} accounts`, coll: "Collected · 7 days", collF: p => p == null ? "" : `${p >= 0 ? "▲" : "▼"} ${Math.abs(p)}% vs last week`,
+           cash: "Cash sales · yesterday", cashF: p => p == null ? "" : `${p >= 0 ? "▲" : "▼"} ${Math.abs(p)}% vs a usual day`, fest: "Next festival", festF: (d, i) => `in ${d} days · stock ${i}`, noFest: "No festival soon", late: "Likely late", lateF: a => `${a} at risk` },
+    engineSub: h => h.model_ready ? "Gemma, Whisper, SQLite on this laptop" : "Rules mode · start Ollama for Gemma",
+    shopMeta: (c, n) => `${c} · ${n} accounts`, modelChip: h => h.model_ready ? `${h.model} · local` : "rules mode",
     demo: "<b>Live demo</b> with a sample shop's 13 months of history. Type to try it. On the shop's own laptop you can also speak.",
     "cmd.go": "Enter", "brief.title": "Today's briefing", "recent.title": "Recent entries", "bal.title": "Udhaar balances",
     "cust.search": "Search customers", "cust.risk": "Risk", "cust.due": "Due", "cust.name": "Name",
@@ -18,8 +23,8 @@ const T = {
     "dlg.close": "Close", "dlg.copy": "Copy", "dlg.wa": "Send on WhatsApp",
     hello: h => h < 12 ? "Good morning." : h < 17 ? "Good afternoon." : "Good evening.",
     sub: (due, n) => `${due} is out on udhaar across ${n} customers.`,
-    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "Who owes the most?", "How much sugar next week?", "Sharma ji ne 500 jama kiye", "Aaj ka hisab"],
-    hintsK: "Try", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Who owes the most?", "How much sugar next week?", "What should I order?", "Aaj ka hisab"],
+    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "Who owes the most?", "Doña Rosa, dos kilos de azúcar, 96 fiado", "How much sugar next week?", "Aling Nena, isang kilong bigas, 85 utang", "Bu Sri bayar 50 ribu", "Aaj ka hisab"],
+    hintsK: "Try", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Doña Rosa, dos kilos de azúcar, 96 fiado", "Aling Nena isang kilong bigas 85 utang", "Pak Budi ngutang beras 2 kilo 30 ribu", "Who owes the most?", "How much sugar next week?", "What should I order?"],
     listening: "Listening… tap again to stop", working: "Working…",
     kind: { credit: "Udhaar", sale: "Cash sale", payment: "Paid back" }, band: { high: "Likely late", watch: "Watch", ok: "Reliable" },
     walkin: "Walk-in", written: "Written to the khata", checking: "Gemma checking…", corrected: e => `Corrected by ${e}`, confirmed: e => `Checked by ${e} ✓`, undo: "Undo", removed: "Removed",
@@ -42,7 +47,7 @@ const T = {
     reminderFor: n => `Reminder for ${n}`, reminderSub: "Drafted by Gemma on this laptop. Edit before sending.",
     orderT: "Order for the wholesaler", orderSub: "From the forecast. Edit quantities before sending.", copied: "Copied",
     gemmaWriting: "Writing…",
-    stages: [["Speak or type", "Marathi, Hindi, English, or all three"], ["Whisper", "faster-whisper turns speech into text"], ["Gemma 3", "Decides: write an entry, or answer a question"], ["SQLite", "The khata. Every number comes from here"], ["TabPFN", "Late-payment risk and festival forecast"]],
+    stages: [["Speak or type", "Marathi, Hindi, English, Spanish, Filipino, Indonesian, or a mix"], ["Whisper", "faster-whisper turns speech into text"], ["Gemma 3", "Decides: write an entry, or answer a question"], ["SQLite", "The khata. Every number comes from here"], ["TabPFN", "Late-payment risk and festival forecast"]],
     where: { local: "on the laptop", off: "not running", cloud: "API, numbers only", rules: "rules fallback", base: "baseline model" },
     stays: ["<b>The voice recording.</b> Transcribed locally, then deleted.", "<b>Names, phone numbers, amounts.</b> One file: <code>data/udhaar.db</code>.", "<b>Understanding sentences.</b> Gemma runs in Ollama. No internet needed."],
     leaves: ["<b>Anonymous numbers for TabPFN-3.5:</b> amounts, day counts, weekdays. No names, no items.", "<b>Nothing at all</b> if you install TabPFN's open weights locally.", "<b>Reminders and orders</b> are sent by the shopkeeper, from their own WhatsApp."],
@@ -51,6 +56,11 @@ const T = {
   },
   mr: {
     "nav.today": "आज", "nav.customers": "ग्राहक", "nav.forecast": "अंदाज", "nav.hood": "आत काय चालते",
+    "cust.kicker": "उधार खाती", "fc.kicker": "माल नियोजन · TabPFN", "hood.kicker": "Open models, एक लॅपटॉप",
+    kpi: { out: "एकूण बाकी", outF: n => `${n} खात्यांवर`, coll: "वसूल · 7 दिवस", collF: p => p == null ? "" : `${p >= 0 ? "▲" : "▼"} ${Math.abs(p)}% मागच्या आठवड्यापेक्षा`,
+           cash: "रोख विक्री · काल", cashF: p => p == null ? "" : `${p >= 0 ? "▲" : "▼"} ${Math.abs(p)}% नेहमीपेक्षा`, fest: "पुढचा सण", festF: (d, i) => `${d} दिवसांत · ${i} भरा`, noFest: "जवळ सण नाही", late: "उशीर शक्य", lateF: a => `${a} धोक्यात` },
+    engineSub: h => h.model_ready ? "Gemma, Whisper, SQLite या लॅपटॉपवर" : "नियम पद्धत · Gemma साठी Ollama सुरू करा",
+    shopMeta: (c, n) => `${c} · ${n} खाती`, modelChip: h => h.model_ready ? `${h.model} · स्थानिक` : "नियम पद्धत",
     demo: "<b>थेट डेमो</b>: नमुना दुकानाचा 13 महिन्यांचा इतिहास. टाइप करून पाहा. दुकानाच्या लॅपटॉपवर बोलूनही वापरता येते.",
     "cmd.go": "लिहा", "brief.title": "आजचा आढावा", "recent.title": "शेवटच्या नोंदी", "bal.title": "उधारी",
     "cust.search": "ग्राहक शोधा", "cust.risk": "धोका", "cust.due": "बाकी", "cust.name": "नाव",
@@ -61,7 +71,7 @@ const T = {
     "dlg.close": "बंद", "dlg.copy": "कॉपी", "dlg.wa": "WhatsApp वर पाठवा",
     hello: h => h < 12 ? "सुप्रभात." : h < 17 ? "नमस्कार." : "शुभ संध्याकाळ.",
     sub: (due, n) => `${n} ग्राहकांकडे एकूण ${due} उधार बाकी.`,
-    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "कोणाकडे सर्वात जास्त बाकी?", "Pudhchya athavdyat kiti sakhar?", "Sharma ji ne 500 jama kiye", "Aaj ka hisab"],
+    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "कोणाकडे सर्वात जास्त बाकी?", "Doña Rosa, dos kilos de azúcar, 96 fiado", "Pudhchya athavdyat kiti sakhar?", "Aling Nena, isang kilong bigas, 85 utang", "Aaj ka hisab"],
     hintsK: "उदा.", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Kon jast baki?", "Pudhchya athavdyat kiti sakhar?", "Kay mangvaycha?", "Aaj ka hisab"],
     listening: "ऐकत आहे… थांबवण्यासाठी पुन्हा टॅप करा", working: "करत आहे…",
     kind: { credit: "उधार", sale: "रोख", payment: "जमा" }, band: { high: "उशीर शक्य", watch: "लक्ष ठेवा", ok: "भरवशाचे" },
@@ -85,7 +95,7 @@ const T = {
     reminderFor: n => `${n} यांना आठवण`, reminderSub: "Gemma ने या लॅपटॉपवर लिहिले. पाठवण्यापूर्वी बदला.",
     orderT: "होलसेलरसाठी ऑर्डर", orderSub: "अंदाजावरून. पाठवण्यापूर्वी आकडे तपासा.", copied: "कॉपी केले",
     gemmaWriting: "लिहित आहे…",
-    stages: [["बोला किंवा लिहा", "मराठी, हिंदी, इंग्रजी किंवा मिसळून"], ["Whisper", "आवाजाचा मजकूर करते"], ["Gemma 3", "ठरवते: नोंद लिहायची की उत्तर द्यायचे"], ["SQLite", "खाते. प्रत्येक आकडा इथूनच"], ["TabPFN", "उशिरा भरणी आणि सणाचा अंदाज"]],
+    stages: [["बोला किंवा लिहा", "मराठी, हिंदी, इंग्रजी, स्पॅनिश, फिलिपिनो, इंडोनेशियन किंवा मिसळून"], ["Whisper", "आवाजाचा मजकूर करते"], ["Gemma 3", "ठरवते: नोंद लिहायची की उत्तर द्यायचे"], ["SQLite", "खाते. प्रत्येक आकडा इथूनच"], ["TabPFN", "उशिरा भरणी आणि सणाचा अंदाज"]],
     where: { local: "लॅपटॉपवर", off: "बंद", cloud: "API, फक्त आकडे", rules: "नियम पद्धत", base: "साधे मॉडेल" },
     stays: ["<b>आवाजाचे रेकॉर्डिंग.</b> इथेच मजकूर होऊन पुसले जाते.", "<b>नावे, फोन नंबर, रक्कम.</b> एकच फाइल: <code>data/udhaar.db</code>.", "<b>वाक्य समजणे.</b> Gemma Ollama मध्ये चालते. इंटरनेट लागत नाही."],
     leaves: ["<b>TabPFN-3.5 साठी निनावी आकडे:</b> रक्कम, दिवस, वार. नावे नाहीत, माल नाही.", "<b>काहीच नाही</b>, जर TabPFN चे open weights लॅपटॉपवर लावले.", "<b>आठवण आणि ऑर्डर</b> दुकानदार स्वतःच्या WhatsApp वरून पाठवतात."],
@@ -97,7 +107,8 @@ let lang = (() => { try { return localStorage.getItem("udhaar.lang") || "en"; } 
 const L = () => T[lang];
 const tr = k => T[lang][k] ?? T.en[k] ?? k;
 const loc = () => (lang === "mr" ? "mr-IN-u-nu-latn" : "en-IN");
-const inr = n => "₹" + Math.round(n || 0).toLocaleString("en-IN");
+let CUR = "₹";
+const inr = n => CUR + Math.round(n || 0).toLocaleString("en-IN");
 const num = n => Math.round(n || 0).toLocaleString("en-IN");
 const ITEM_MR = { sugar: "साखर", oil: "तेल", rice: "तांदूळ", atta: "आटा", "toor dal": "तूर डाळ", milk: "दूध", onion: "कांदा", potato: "बटाटा", tea: "चहा पत्ती", noodles: "नूडल्स", soap: "साबण", biscuits: "बिस्किटे", ghee: "तूप", besan: "बेसन", rava: "रवा", maida: "मैदा", eggs: "अंडी", salt: "मीठ" };
 const itemName = i => (lang === "mr" ? ITEM_MR[i] || i : i);
@@ -106,6 +117,17 @@ const festName = d => (FEST[d] || ["The festival", "सण"])[lang === "mr" ? 1 
 const UNIT = { milk: "l", oil: "l", eggs: "dz", noodles: "pkt", biscuits: "pkt", tea: "pkt", soap: "pc" };
 const unit = i => UNIT[i] || "kg";
 const shortDate = iso => new Date(iso).toLocaleDateString(loc(), { day: "numeric", month: "short" });
+
+const AV = ["#F7C35F", "#FF8F6B", "#3DD6A3", "#7CB4FF", "#C69CFF", "#FF7FB0", "#5ED3E8"];
+const initials = n => (n || "?").replace(/^(do[nñ]a?|se[nñ]ora?|aling|mang|kuya|ate|tita|tito|bu|ibu|pak|bapak|mbak|mas)\s+/i, "").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+const avatar = n => { let h = 0; for (const c of n || "") h = (h * 31 + c.charCodeAt(0)) >>> 0; return `<span class="av" style="background:${AV[h % AV.length]}">${esc(initials(n) || "·")}</span>`; };
+/* numbers count up once, on first paint */
+function countUp(el, to, fmt) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = fmt(to); return; }
+  const t0 = performance.now(), d = 700;
+  const step = t => { const k = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - k, 3); el.textContent = fmt(to * e); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
 
 /* ---------------- plumbing ---------------- */
 const S = { health: null, ledger: null, ins: null, brief: null, summary: null, bt: null, sel: null, cust: null, item: null, sort: "risk" };
@@ -128,7 +150,7 @@ function go(view) {
   $$("nav.tabs button").forEach(b => b.dataset.view === view ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
   $$(".view").forEach(v => v.classList.toggle("active", v.id === "v-" + view));
   if (view === "customers" && !S.sel) pickFirst();
-  if (view === "hood" && !S.summary) loadHood();
+  if (view === "hood") (S.bt ? renderHood() : loadHood());
   window.scrollTo(0, 0);
   try { history.replaceState(null, "", "#" + view); } catch {}
 }
@@ -144,6 +166,7 @@ function applyLang() {
   $$("[data-i18n-ph]").forEach(el => { el.placeholder = tr(el.dataset.i18nPh); });
   $$(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
   $("#hello").textContent = L().hello(new Date().getHours());
+  $("#today").textContent = new Date().toLocaleDateString(loc(), { weekday: "long", day: "numeric", month: "long" });
   $("#q").placeholder = L().ph[0];
   $("#hints").innerHTML = `<span class="k">${L().hintsK}</span>` + L().hints.map(h => `<button type="button">${esc(h)}</button>`).join("");
   $$("#hints button").forEach(b => b.onclick = () => { $("#q").value = b.textContent; submit(); });
@@ -158,10 +181,10 @@ setInterval(() => { if (document.activeElement !== $("#q") && !$("#q").value) { 
 $("#cmd").onsubmit = e => { e.preventDefault(); submit(); };
 async function submit() {
   const text = $("#q").value.trim(); if (!text) return;
-  $("#goBtn").disabled = true; $("#reply").innerHTML = `<div class="reply"><div class="q">${esc(text)}</div><div class="a faint">${L().working}</div></div>`;
+  $("#goBtn").disabled = true; $("#cmdWrap").classList.add("thinking");
   try { show(await post("/api/ask", { text, lang })); $("#q").value = ""; }
   catch (e) { $("#reply").innerHTML = ""; toast(e.message); }
-  finally { $("#goBtn").disabled = false; }
+  finally { $("#goBtn").disabled = false; $("#cmdWrap").classList.remove("thinking"); }
 }
 let rec, chunks = [];
 $("#mic").onclick = async () => {
@@ -173,11 +196,12 @@ $("#mic").onclick = async () => {
     rec.ondataavailable = e => chunks.push(e.data);
     rec.onstop = async () => {
       stream.getTracks().forEach(x => x.stop()); $("#mic").classList.remove("rec");
-      $("#reply").innerHTML = `<div class="reply"><div class="a faint">${L().working}</div></div>`;
+      $("#cmdWrap").classList.remove("listening"); $("#cmdWrap").classList.add("thinking");
       const fd = new FormData(); fd.append("audio", new Blob(chunks, { type: rec.mimeType }), "clip.webm");
       try { show(await api(`/api/voice?lang=${lang}`, { method: "POST", body: fd })); } catch (e) { $("#reply").innerHTML = ""; toast(e.message); }
+      finally { $("#cmdWrap").classList.remove("thinking"); }
     };
-    rec.start(); $("#mic").classList.add("rec"); $("#q").placeholder = L().listening;
+    rec.start(); $("#mic").classList.add("rec"); $("#cmdWrap").classList.add("listening"); $("#q").placeholder = L().listening;
   } catch { toast(L().micBlocked); }
 };
 
@@ -187,8 +211,8 @@ function show(r, note = "") {
   let body;
   if (r.mode === "entry") {
     const p = r.parsed;
-    const items = (p.items || []).map(i => `<span class="chip">${esc(itemName(i.name))}${i.qty != null ? " · " + i.qty + (i.unit ? " " + esc(i.unit) : "") : ""}</span>`).join("");
-    body = `<div class="entry-line"><span class="tag ${p.kind}">${L().kind[p.kind]}</span><b>${esc(p.customer || L().walkin)}</b>${items}<span style="margin-left:auto;font-weight:600">${p.total != null ? inr(p.total) : ""}</span></div>
+    const items = (p.items || []).map(i => `<span class="chip-s">${esc(itemName(i.name))}${i.qty != null ? " · " + i.qty + (i.unit ? " " + esc(i.unit) : "") : ""}</span>`).join("");
+    body = `<div class="entry-line">${avatar(p.customer || L().walkin)}<b>${esc(p.customer || L().walkin)}</b><span class="tag ${p.kind}">${L().kind[p.kind]}</span>${items}<span class="big tnum">${p.total != null ? inr(p.total) : ""}</span></div>
       <div class="acts"><button class="btn link" id="undoBtn">${L().undo}</button></div>`;
   } else {
     const rows = (r.rows || []).map(row => `<tr>${row.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
@@ -196,7 +220,7 @@ function show(r, note = "") {
       + (r.customer_id ? `<button class="btn link" data-open="${r.customer_id}">${L().openCust} →</button>` : "");
     body = `<div class="a">${esc(r.answer)}</div>${rows ? `<table><tbody>${rows}</tbody></table>` : ""}${acts ? `<div class="acts">${acts}</div>` : ""}`;
   }
-  $("#reply").innerHTML = `<div class="reply"><div class="q"><span>${esc(r.text)}</span><span>${meta}${stt}</span></div>${body}</div>`;
+  $("#reply").innerHTML = `<div class="reply${note ? " flash" : ""}"><div class="q"><span>${esc(r.text)}</span><span class="${note ? "fix" : ""}">${meta}${stt}</span></div>${body}</div>`;
   if (r.mode === "entry") {
     if (!note) toast(L().written);
     if (r.refine && !note) pollRefine(r);
@@ -216,34 +240,71 @@ async function pollRefine(r) {
     if (j.status !== "done") continue;
     if (!$("#reply .reply") || r._gone) return;
     if (j.changed) { show({ ...r, parsed: { ...j.parsed, _engine: j.engine }, ids: j.ids, refine: null }, L().corrected(j.engine)); refresh(); }
-    else { const m = $("#reply .q span:last-child"); if (m && j.engine !== "rules") m.textContent = L().confirmed(j.engine); }
+    else { const m = $("#reply .q span:last-child"); if (m && j.engine !== "rules") { m.textContent = L().confirmed(j.engine); m.className = "ok"; } }
     return;
   }
 }
 function act(a) { if (!a) return; a.type === "remind" ? remind(a.customer, a.due) : draftOrder(); }
 
 /* ---------------- briefing + lists ---------------- */
+const BICON = {
+  collect: '<svg viewBox="0 0 24 24"><path d="M12 3v18M16.5 7.5c0-1.9-2-3-4.5-3s-4.5 1.1-4.5 3 2 2.6 4.5 3.2 4.5 1.3 4.5 3.3-2 3.3-4.5 3.3-4.5-1.2-4.5-3"/></svg>',
+  order: '<svg viewBox="0 0 24 24"><path d="M4 5h2l2 11h10l2-8H7"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>',
+  day: '<svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M6 16V11M11 16V7M16 16v-4M21 16V9"/></svg>',
+};
 function renderBrief() {
   const B = S.brief; if (!B) return;
-  $("#todaySub").textContent = L().sub(inr(B.total_due), B.accounts);
-  $("#brief").innerHTML = B.cards.map((c, i) => `<li>
-      <div class="kind">${L().briefKind[c.kind]}</div>
-      <div><div class="t">${esc(c.title)}</div><div class="b">${esc(c.body)}</div>
-        ${c.names ? `<div class="names">${c.names.map(n => `<button data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}</div>
+  $("#brief").innerHTML = B.cards.map((c, i) => `<article class="card">
+      <div class="bk ${c.kind}"><span class="ico">${BICON[c.kind]}</span>${L().briefKind[c.kind]}</div>
+      <div class="t">${esc(c.title)}</div><div class="b">${esc(c.body)}</div>
+      ${c.names ? `<div class="names">${c.names.map(n => `<button data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}
       <div class="act">${c.action ? `<button class="btn ${i === 0 ? "primary" : ""}" data-card="${i}">${c.action.type === "remind" ? L().remind : L().order}</button>` : ""}</div>
-    </li>`).join("");
+    </article>`).join("");
   $$("#brief [data-card]").forEach(b => b.onclick = () => act(B.cards[+b.dataset.card].action));
   $$("#brief [data-name]").forEach(b => b.onclick = () => { const x = (S.ledger?.balances || []).find(y => y.name === b.dataset.name); if (x) openCust(x.id); });
-  const R = S.ins?.restock;
-  $("#briefMeta").textContent = R?.next_festival ? `${festName(R.next_festival)} · ${R.days_to_festival}d` : "";
+  $("#briefMeta").textContent = new Date().toLocaleDateString(loc(), { day: "numeric", month: "short" });
+  renderKpis();
 }
+function spark(vals, color) {
+  if (!vals || vals.length < 2) return "";
+  const w = 120, h = 40, max = Math.max(...vals) || 1, min = Math.min(...vals);
+  const X = i => i / (vals.length - 1) * w, Y = v => h - 3 - (v - min) / ((max - min) || 1) * (h - 8);
+  const d = vals.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join("");
+  return `<svg class="sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${d}L${w} ${h}L0 ${h}Z" fill="${color}" opacity=".12" stroke="none"/><path d="${d}" stroke="${color}" stroke-width="1.6"/></svg>`;
+}
+let kpiPainted = false;
+function renderKpis() {
+  const B = S.brief, R = S.ins?.restock, W = S.summary?.weeks || [], K = L().kpi; if (!B) return;
+  const coll = W.map(w => w.payment), last = coll.at(-1), prev = coll.at(-2);
+  const collPct = prev ? Math.round((last / prev - 1) * 100) : null;
+  const day = B.cards.find(c => c.kind === "day"), dayPct = day ? +(day.body.match(/^([+-]?\d+)%/) || [])[1] : NaN;
+  const cashVals = W.map(w => w.sale), risk = (S.ins?.risk?.customers || []).filter(c => c.band === "high");
+  const fest = R?.next_festival && R.items?.[0]?.festival_14d != null;
+  const cards = [
+    { lbl: K.out, ico: '<svg viewBox="0 0 24 24"><path d="M4 7h16v12H4z"/><path d="M4 7l2-3h12l2 3M9 12h6"/></svg>', v: B.total_due, fmt: inr, foot: K.outF(B.accounts), sp: spark(W.map(w => w.credit), "var(--risk)") },
+    { lbl: K.coll, ico: '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>', v: last || 0, fmt: inr, foot: `<span class="${collPct >= 0 ? "up" : "dn"}">${K.collF(collPct)}</span>`, sp: spark(coll, "var(--accent)") },
+    { lbl: K.late, ico: '<svg viewBox="0 0 24 24"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></svg>', v: risk.length, fmt: num, foot: K.lateF(inr(risk.reduce((a, c) => a + c.due, 0))), sp: spark(cashVals, "var(--ink-3)") },
+    fest ? { hot: true, lbl: K.fest, ico: '<svg viewBox="0 0 24 24"><path d="M12 3c2.5 3.2 2.5 5.6 0 7.5-2.5-1.9-2.5-4.3 0-7.5z"/><path d="M4 14c2 5.3 14 5.3 16 0z"/></svg>', v: R.days_to_festival, fmt: v => `${festName(R.next_festival)} · ${num(v)}d`, foot: K.festF(R.days_to_festival, R.items.slice(0, 3).map(i => itemName(i.item)).join(", ")) }
+         : { lbl: K.fest, ico: "", v: 0, fmt: () => "—", foot: K.noFest },
+  ];
+  $("#kpis").innerHTML = cards.map(c => `<div class="kpi${c.hot ? " hot" : ""}"><div class="lbl">${c.ico}${c.lbl}</div><div class="val">${c.fmt(c.v)}</div><div class="foot">${c.foot}</div>${c.sp || ""}</div>`).join("");
+  if (!kpiPainted) { $$("#kpis .val").forEach((el, i) => cards[i].v && countUp(el, cards[i].v, cards[i].fmt)); kpiPainted = true; }
+  // header chips
+  const h = S.health || {};
+  $("#headChips").innerHTML = (fest ? `<span class="chip fest">✦ <b>${festName(R.next_festival)}</b> ${R.days_to_festival}d</span>` : "")
+    + `<span class="chip"><i class="dot ${h.model_ready ? "on" : "off"}"></i>${L().modelChip(h)}</span>`;
+}
+let seenIds = new Set();
 function renderRecent() {
-  const rows = (S.ledger?.recent || []).slice(0, 9);
-  $("#recentMeta").textContent = "";
-  $("#recent").innerHTML = rows.map(e => `<li>
-      <span class="time tnum">${esc(e.ts.slice(11, 16))}</span>
-      <span><span class="nm">${esc(e.customer || L().walkin)}</span> <span class="what">${e.item ? "· " + esc((e.qty != null ? +e.qty + " " + (e.unit || "") + " " : "") + itemName(e.item)) : ""}</span></span>
-      <span class="amt ${e.kind} tnum">${e.kind === "payment" ? "+" : ""}${e.amount ? inr(e.amount) : "—"}<button class="x" data-del="${e.id}" aria-label="Remove">✕</button></span></li>`).join("") || `<li class="empty">—</li>`;
+  const rows = (S.ledger?.recent || []).slice(0, 8);
+  const fresh = seenIds.size ? new Set(rows.filter(e => !seenIds.has(e.id)).map(e => e.id)) : new Set();
+  rows.forEach(e => seenIds.add(e.id));
+  $("#recentMeta").textContent = rows[0] ? shortDate(rows[0].ts) : "";
+  $("#recent").innerHTML = rows.map(e => `<li class="${fresh.has(e.id) ? "new" : ""}">
+      ${avatar(e.customer || L().walkin)}
+      <span><span class="nm">${esc(e.customer || L().walkin)}</span> <span class="tag ${e.kind}">${L().kind[e.kind]}</span><br>
+        <span class="what"><span class="time tnum">${esc(e.ts.slice(11, 16))}</span>${e.item ? esc((e.qty != null ? +e.qty + " " + (e.unit || "") + " " : "") + itemName(e.item)) : ""}</span></span>
+      <span class="amt ${e.kind}">${e.kind === "payment" ? "+" : ""}${e.amount ? inr(e.amount) : "—"}<button class="x" data-del="${e.id}" aria-label="Remove">✕</button></span></li>`).join("") || `<li class="empty">—</li>`;
   $$("#recent [data-del]").forEach(b => b.onclick = async () => { await api(`/api/entries/${b.dataset.del}`, { method: "DELETE" }); toast(L().removed); refresh(); });
 }
 const riskMap = () => Object.fromEntries((S.ins?.risk?.customers || []).map(c => [c.customer, c]));
@@ -257,7 +318,7 @@ function sortedPeople(q = "") {
 function renderBal() {
   const list = sortedPeople().slice(0, 9);
   $("#balMeta").textContent = S.ledger ? L().accounts(S.ledger.balances.length) : "";
-  $("#bal").innerHTML = list.map(b => `<li data-id="${b.id}"><span class="nm">${esc(b.name)}</span>
+  $("#bal").innerHTML = list.map(b => `<li data-id="${b.id}">${avatar(b.name)}<span class="nm">${esc(b.name)}</span>
       <span>${b.r ? `<span class="pill ${b.r.band}">${L().band[b.r.band]}</span>` : ""}</span><span class="amt tnum">${inr(b.due)}</span></li>`).join("") || `<li class="empty">${L().noCust}</li>`;
   $$("#bal [data-id]").forEach(li => li.onclick = () => openCust(+li.dataset.id));
 }
@@ -266,8 +327,8 @@ function renderBal() {
 function renderPeople() {
   const list = sortedPeople($("#search").value.trim());
   $("#people").innerHTML = list.map(b => `<li><button data-id="${b.id}" ${S.sel === b.id ? 'aria-current="true"' : ""}>
-      <span class="dot ${b.r ? { high: "", watch: "", ok: "on" }[b.r.band] : "off"}" style="${b.r?.band === "high" ? "background:var(--risk)" : b.r?.band === "watch" ? "background:#C99A2E" : ""}"></span>
-      <span class="pn">${esc(b.name)}</span><span class="pd">${inr(b.due)}</span></button></li>`).join("") || `<li class="empty">${L().noCust}</li>`;
+      ${avatar(b.name)}<span class="pn">${esc(b.name)}</span><span class="pd">${inr(b.due)}</span>
+      <span class="rd" style="background:${b.r ? { high: "var(--risk)", watch: "var(--warn)", ok: "var(--accent)" }[b.r.band] : "var(--line-2)"}"></span></button></li>`).join("") || `<li class="empty">${L().noCust}</li>`;
   $$("#people [data-id]").forEach(b => b.onclick = () => openCust(+b.dataset.id, false));
 }
 $("#search").oninput = renderPeople;
@@ -303,23 +364,28 @@ function line({ pts, w = 640, h = 200, color = "var(--ink)", fmt = inr, xl = [],
   s += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.75" stroke-linejoin="round"/><circle cx="${X(pts.length - 1)}" cy="${Y(pts.at(-1))}" r="3.5" fill="${color}"/>`;
   return s + "</svg>";
 }
+function ring(p, col) {
+  const R = 50, C = 2 * Math.PI * R;
+  return `<div class="ring"><svg viewBox="0 0 118 118"><circle class="trk" cx="59" cy="59" r="${R}"/><circle class="val" cx="59" cy="59" r="${R}" stroke="${col}" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C * (1 - p)}"/></svg><b style="color:${col}">${Math.round(p * 100)}%</b></div>`;
+}
 function renderDetail() {
   const c = S.cust;
   if (!c) { $("#detail").innerHTML = `<div class="empty">${L().noCust}</div>`; return; }
-  const r = c.risk, col = r ? { high: "var(--risk)", watch: "#C99A2E", ok: "var(--accent)" }[r.band] : "var(--ink)";
+  const r = c.risk, col = r ? { high: "var(--risk)", watch: "var(--warn)", ok: "var(--accent)" }[r.band] : "var(--ink)";
   const pts = c.series.map(p => p.balance), n = pts.length;
   const xl = n > 2 ? [[0, shortDate(c.series[0].ts)], [n - 1, shortDate(c.series[n - 1].ts)]] : [];
   $("#detail").innerHTML = `
-    <div class="d-head"><div><h1>${esc(c.name)}</h1><div class="sub">${r ? `<span class="pill ${r.band}">${L().band[r.band]}</span>&nbsp; ${L().lastPaid(r.days_since_payment)}` : ""}</div></div>
-      <div class="d-due"><span>${L().owes}</span><b class="tnum">${inr(c.due)}</b></div></div>
-    ${r ? `<div class="risk"><div class="score"><b class="tnum" style="color:${col}">${Math.round(r.risk * 100)}%</b><span>${L().chance}</span><div class="meter"><i style="width:${r.risk * 100}%;background:${col}"></i></div></div>
+    <div class="d-head"><div class="d-id">${avatar(c.name)}<div><h1>${esc(c.name)}</h1><div class="sub">${r ? `<span class="pill ${r.band}">${L().band[r.band]}</span><span class="muted">${L().lastPaid(r.days_since_payment)}</span>` : ""}</div></div></div>
+      <div class="d-due"><span>${L().owes}</span><b>${inr(c.due)}</b></div></div>
+    ${r ? `<div class="risk"><div>${ring(r.risk, col)}<span>${L().chance}</span></div>
       <div class="why"><h3>${L().why}</h3><ul>${reasons(r).map(([k, s]) => `<li class="${k}">${esc(s)}</li>`).join("")}</ul><div class="note">${L().whyNote}</div></div></div>` : ""}
-    <div class="facts"><div>${L().facts[0]}<b class="tnum">${inr(c.credit_total)}</b></div><div>${L().facts[1]}<b class="tnum">${inr(c.paid_total)}</b></div><div>${L().facts[2]}<b class="tnum">${num(c.n_entries)}</b></div></div>
-    ${c.due > 0 ? `<div class="d-actions"><button class="btn primary" id="remBtn">${L().remind}</button></div>` : ""}
-    <div class="sect"><h2 class="h">${L().balance}</h2>${line({ pts, xl, color: col })}</div>
-    <div class="sect"><h2 class="h">${L().history}</h2><ul class="list">${c.entries.slice(0, 12).map(e => `<li>
+    <div class="facts"><div>${L().facts[0]}<b>${inr(c.credit_total)}</b></div><div>${L().facts[1]}<b>${inr(c.paid_total)}</b></div><div>${L().facts[2]}<b>${num(c.n_entries)}</b></div></div>
+    ${c.due > 0 ? `<div class="d-actions"><button class="btn primary" id="remBtn"><svg viewBox="0 0 24 24"><path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/></svg>${L().remind}</button></div>` : ""}
+    <div class="sect"><h2>${L().balance}</h2>${line({ pts, xl, color: col })}</div>
+    <div class="sect"><h2>${L().history}</h2><ul class="hist">${c.entries.slice(0, 12).map(e => `<li>
       <span class="time">${shortDate(e.ts)}</span><span class="what">${e.item ? esc((e.qty != null ? +e.qty + " " + (e.unit || "") + " " : "") + itemName(e.item)) : L().kind[e.kind]}</span>
-      <span class="amt ${e.kind} tnum">${e.kind === "payment" ? "+" : ""}${inr(e.amount)}</span></li>`).join("")}</ul></div>`;
+      <span class="amt ${e.kind}">${e.kind === "payment" ? "+" : ""}${inr(e.amount)}</span></li>`).join("")}</ul></div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => $$("#detail .ring .val").forEach(el => el.style.strokeDashoffset = el.dataset.off)));
   const rb = $("#remBtn"); if (rb) rb.onclick = () => remind(c.name, c.due);
 }
 
@@ -334,7 +400,7 @@ function renderForecast() {
     const f = fest ? i.festival_14d : i.next_7d, n = fest ? i.normal_14d : i.normal_7d, p = fest ? i.festival_change_pct : i.week_change_pct, x = Math.max(0, Math.ceil(f - n));
     return `<tr data-item="${esc(i.item)}" aria-selected="${S.item === i.item}" tabindex="0"><td class="item">${esc(itemName(i.item))}</td>
       <td class="tnum">${num(n)} ${unit(i.item)}</td><td class="tnum">${num(f)} ${unit(i.item)}</td>
-      <td class="tnum ${p > 0 ? "up" : "down"}">${p > 0 ? "+" : ""}${p ?? 0}%</td><td class="tnum">${x ? "+" + num(x) + " " + unit(i.item) : "—"}</td></tr>`;
+      <td><span class="barcell"><i style="width:${Math.max(4, Math.min(60, Math.abs(p || 0) * 1.4))}px;${p > 0 ? "" : "background:var(--line-2)"}"></i><span class="${p > 0 ? "up" : "down"}">${p > 0 ? "+" : ""}${p ?? 0}%</span></span></td><td class="tnum">${x ? "+" + num(x) + " " + unit(i.item) : "—"}</td></tr>`;
   }).join("");
   $$("#fcBody tr").forEach(t => { t.onclick = () => { S.item = t.dataset.item; renderForecast(); }; t.onkeydown = e => e.key === "Enter" && t.click(); });
   $("#fcNote").textContent = L().fcNote(R.engine, num(R.train_rows), (S.ins.ms / 1000).toFixed(1) + "s");
@@ -342,7 +408,7 @@ function renderForecast() {
   const start = new Date(R.from), n = it.daily.length;
   const fi = R.next_festival ? Math.round((new Date(R.next_festival) - start) / 864e5) : null;
   $("#itemTitle").textContent = L().itemTitle(itemName(it.item));
-  $("#itemChart").innerHTML = line({ pts: it.daily, w: 520, h: 240, color: "var(--accent)", fmt: v => num(v) + " " + unit(it.item),
+  $("#itemChart").innerHTML = line({ pts: it.daily, w: 520, h: 240, color: "var(--brand)", fmt: v => num(v) + " " + unit(it.item),
     xl: [[0, shortDate(R.from)], [n - 1, shortDate(new Date(start.getTime() + (n - 1) * 864e5).toISOString())]],
     base: fest ? it.normal_14d / 14 : it.normal_7d / 7, mark: fi != null && fi < n ? [fi, festName(R.next_festival)] : null });
 }
@@ -353,12 +419,20 @@ $("#dlgClose").onclick = () => dlg.close();
 $("#dlgCopy").onclick = async () => { try { await navigator.clipboard.writeText($("#dlgText").value); toast(L().copied); } catch {} };
 const syncWa = () => { $("#dlgWa").href = "https://wa.me/?text=" + encodeURIComponent($("#dlgText").value); };
 $("#dlgText").oninput = syncWa;
-async function remind(name, due) {
-  $("#dlgTitle").textContent = L().reminderFor(name); $("#dlgSub").textContent = L().reminderSub; $("#dlgText").value = L().gemmaWriting; dlg.showModal();
-  try { $("#dlgText").value = (await post("/api/reminder", { customer: name, due, language: lang === "mr" ? "marathi" : "simple english" })).text; } catch (e) { toast(e.message); }
+let remindFor = null;
+async function remind(name, due, language) {
+  remindFor = { name, due };
+  const sel = $("#dlgLang"); sel.hidden = false;
+  if (!language) { language = /\b(do[nñ]a?|se[nñ]ora?)\b/i.test(name) ? "spanish" : /\b(aling|mang|kuya|ate|tita|tito)\b/i.test(name) ? "filipino" : /\b(bu|ibu|pak|bapak|mbak|mas)\b/i.test(name) ? "indonesian" : (lang === "mr" ? "marathi" : "english"); }
+  sel.value = language;
+  $("#dlgTitle").textContent = L().reminderFor(name); $("#dlgSub").textContent = L().reminderSub; $("#dlgText").value = L().gemmaWriting;
+  if (!dlg.open) dlg.showModal();
+  try { $("#dlgText").value = (await post("/api/reminder", { customer: name, due, language })).text; } catch (e) { toast(e.message); }
   syncWa();
 }
+$("#dlgLang").onchange = e => remindFor && remind(remindFor.name, remindFor.due, e.target.value);
 async function draftOrder() {
+  remindFor = null; $("#dlgLang").hidden = true;
   $("#dlgTitle").textContent = L().orderT; $("#dlgSub").textContent = L().orderSub; $("#dlgText").value = "…"; dlg.showModal();
   try { $("#dlgText").value = (await api(`/api/order?lang=${lang}`)).text; } catch (e) { toast(e.message); }
   syncWa();
@@ -386,7 +460,7 @@ function renderHood() {
   } else $("#bt").innerHTML = `<div class="empty">${bt.none}</div>`;
   const Wk = S.summary?.weeks || [];
   if (Wk.length) {
-    const w = 520, hh = 220, P = { l: 60, r: 4, t: 10, b: 26 }, keys = [["sale", "var(--ink)"], ["credit", "var(--risk)"], ["payment", "var(--accent)"]];
+    const w = 520, hh = 220, P = { l: 60, r: 4, t: 10, b: 26 }, keys = [["sale", "var(--ink-2)"], ["credit", "var(--risk)"], ["payment", "var(--accent)"]];
     const max = Math.max(...Wk.flatMap(x => keys.map(([k]) => x[k]))) * 1.08, gw = (w - P.l - P.r) / Wk.length, bw = Math.min(10, gw / 4.5);
     const Y = v => P.t + (1 - v / max) * (hh - P.t - P.b);
     let s = `<svg class="chart" viewBox="0 0 ${w} ${hh}" role="img">`;
@@ -404,6 +478,10 @@ function renderStatus() {
   $("#localDot").className = "dot " + (h.model_ready ? "on" : "off");
   $("#localText").textContent = L().localText(h);
   $("#demo").hidden = !h.demo;
+  if (h.currency) CUR = h.currency;
+  $("#engineSub").textContent = L().engineSub(h);
+  if (h.shop) $("#shopName").textContent = h.shop;
+  $("#shopMeta").textContent = L().shopMeta(h.city || "", S.ledger?.balances?.length ?? "–");
 }
 function renderAll() {
   renderStatus(); renderBrief(); renderRecent(); renderBal(); renderPeople(); renderForecast();
@@ -413,8 +491,8 @@ function renderAll() {
 async function refresh() {
   S.ledger = await api("/api/ledger"); renderRecent(); renderBal(); renderPeople();
   try { S.ins = await api("/api/insights"); } catch {}
-  try { S.brief = await api(`/api/brief?lang=${lang}`); } catch {}
-  renderBrief(); renderBal(); renderPeople(); renderForecast();
+  try { [S.brief, S.summary] = await Promise.all([api(`/api/brief?lang=${lang}`), api("/api/summary")]); } catch {}
+  renderStatus(); renderBrief(); renderBal(); renderPeople(); renderForecast();
   if (current === "customers") S.sel ? openCust(S.sel, false) : pickFirst();
 }
 (async function init() {

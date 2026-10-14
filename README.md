@@ -1,6 +1,6 @@
 # Udhaar · उधार
 
-**A local AI back-office for small shops.** One box: speak or type in Marathi, Hindi or English.
+**A local AI back-office for the world's corner shops.** Udhaar, fiado, utang, hutang: the same credit notebook, everywhere. One box: speak or type in Marathi, Hindi, English, Spanish, Filipino or Indonesian.
 
 - **Statements become entries.** *"Patil kaku, don kilo sakhar, 210 udhaar"* is written into the khata.
 - **Questions get answers from the shop's own data.** *"Who owes the most?"*, *"how much sugar next week?"*, *"aaj ka hisab"*. Gemma picks the intent; SQL and TabPFN supply the numbers.
@@ -32,7 +32,7 @@ To use the mic from the shop's phone over Wi-Fi, run `python scripts/serve_https
 Remove the demo data once the shop has real entries: `python scripts/make_demo_data.py --wipe`.
 
 ### Settings (env vars)
-`UDHAAR_MODEL` (default `gemma3:4b`) · `UDHAAR_WHISPER` (`small`; use `medium` for better Marathi if the GPU allows) · `UDHAAR_LANG` (`mr`/`hi` to force a language) · `TABPFN_TOKEN` · `UDHAAR_NO_LOCAL_TABPFN=1`
+`UDHAAR_CURRENCY` (default `₹`; e.g. `$`, `₱`, `Rp `) · `UDHAAR_MODEL` (default `gemma3:4b`) · `UDHAAR_WHISPER` (`small`; use `medium` for better Marathi if the GPU allows) · `UDHAAR_LANG` (`mr`/`hi` to force a language) · `TABPFN_TOKEN` · `UDHAAR_NO_LOCAL_TABPFN=1`
 
 ## Tests and backtest
 ```bash

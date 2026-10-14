@@ -1,5 +1,5 @@
 ---
-title: "Udhaar: a local AI back-office for India's corner shops, built on Gemma and TabPFN"
+title: "The world's corner shops still run on a credit notebook. I gave it Gemma, TabPFN and no internet."
 tags: devchallenge, hf26challenge, opensource, ai
 ---
 
@@ -9,6 +9,8 @@ tags: devchallenge, hf26challenge, opensource, ai
 
 ## The notebook behind the counter
 
+In Mexico it's called *fiado*. In a Philippine sari-sari store it's *utang*, written on a *listahan*. In an Indonesian warung it's *hutang* or *bon*. In India it's *udhaar*, kept in a *khata*. Different words, same notebook: the corner shop lets the neighbourhood take goods now and pay later, and writes it down by hand.
+
 Every kirana shop in India has one. It's a long, thin notebook, usually red, full of names like *Patil Kaku* and *Sharma Ji* and numbers that keep growing. That's the **udhaar khata**, the credit book. Half the neighbourhood buys on it and pays at the end of the month… or the month after… or the month after that.
 
 [FILL: 2–3 sentences about the shop near your home in Aurangabad. How long it's been there, who runs it, what you saw when you asked about their khata. Use a real detail, e.g. "he showed me three notebooks, one held together with a rubber band."]
@@ -17,7 +19,13 @@ Every app that tries to fix this asks the shopkeeper to *type* during the evenin
 
 ## What I built
 
-**Udhaar is an AI back-office for a corner shop that runs on the shop's own laptop.** It has one box. You can speak into it or type into it, in Marathi, Hindi, English or the mix everyone actually speaks.
+**Udhaar is an AI back-office for a corner shop that runs on the shop's own laptop.** It has one box. You can speak into it or type into it in Marathi, Hindi, English, Spanish, Filipino or Indonesian, or the mix people actually speak at a counter.
+
+> *"Doña Rosa, dos kilos de azúcar y un aceite, apúntalo, 96 pesos"*
+> *"Aling Nena, isang kilong bigas at dalawang itlog, 85 utang"*
+> *"Pak Budi ngutang beras 2 kilo dan minyak goreng 1 liter, 48.000"*
+
+All three become the same kind of entry in the same ledger. I built and tested it with a real shop in Aurangabad, India [FILL once you've done the visit], but nothing in it is Indian-only.
 
 Say something the way you'd write it in the notebook, and it gets written down:
 
@@ -77,9 +85,23 @@ I wrote 18 real-sounding counter lines, including Devanagari, half-payments and 
 | Parser | Fully correct entries | Median latency |
 |---|---|---|
 | Rules only | 12 / 18 | <1 ms |
-| Gemma 3 4B (local) | [FILL from `python scripts/eval_parser.py`] | [FILL] |
+| Gemma 3 4B (local) | **15 / 18** | ~6 s |
+| Gemma 3 1B (local, fits the GPU) | 9 / 18 | ~3.5 s |
 
-[FILL: one sentence on where Gemma won, probably the Devanagari lines and "1200 baki, aaj 400 parat dile", where the rules picked the wrong number.]
+Gemma got the type of entry, the customer and the amount right on all 18 lines; the rules managed 15, 14 and 16. Gemma's three misses were all in the item list, which is the least costly mistake: the money is still right and the shopkeeper can fix an item with one tap.
+
+That left me with a real problem: my laptop's GPU has 4 GB, Gemma 3 4B needs about 3.5 GB plus room to think, so half of it spills onto the CPU and every entry takes ~6 seconds. Nobody waits 6 seconds per line in the evening rush. The 1B model fits the GPU completely, but it was *worse* than my regex rules.
+
+**Outside India.** I wrote 15 counter lines each in the style of a Mexican tiendita, a sari-sari store and a warung, and tuned the rule parser on them until it got all 15. That number is meaningless on its own, so I then wrote 9 *new* lines I never tuned against:
+
+| Lines | Rules | Gemma 3 4B |
+|---|---|---|
+| India (Marathi / Hindi / English), 18 | 12 | 15 |
+| Spanish / Filipino / Indonesian, held out, 9 | 5 | **7** |
+
+Getting the rules to work in four languages taught me how many collisions there are: *don* is "two" in Marathi but a title in Spanish ("Don Pepe"), and *andi* is "eggs" in Marathi but a common Indonesian name ("Mas Andi"). Thousands are written "48.000" in Indonesia and spoken as "50 ribu". Those are exactly the cases the held-out lines catch, and where a language model earns its place.
+
+So Udhaar uses both. **The rules write the entry instantly** (under a millisecond), and the shopkeeper can move on to the next customer. **Gemma re-reads the same line in the background** and, if it understood it differently, quietly corrects the entry a few seconds later, with a small "Corrected by gemma3:4b" note. The counter gets the speed of the rules and the accuracy of the model. Questions work the same way: the rules answer the common phrasings instantly, and Gemma is only called for the long tail.
 
 **Who will pay late (TabPFN classifier).** There's no labelled dataset for "my neighbours' repayment habits", and a corner shop will never have enough data to train a model. That's exactly where TabPFN shines: it makes predictions from a few hundred rows with **no training step**. I replay the khata and take a snapshot of every open account each week. Each snapshot gets labelled by whether that person repaid at least half their dues within 30 days. TabPFN learns from roughly 700 of these snapshots in seconds and scores today's accounts.
 

@@ -13,11 +13,17 @@ from datetime import date, datetime, timedelta
 import httpx
 
 from . import db, parser
+import os
+
+CUR = os.environ.get("UDHAAR_CURRENCY", "₹")
 
 QUESTION_WORDS = {
     "kitna", "kitni", "kitne", "kiti", "kevdha", "kevdhe", "kaun", "kon", "kona", "konala", "konakade", "kuni",
     "kab", "kevha", "kya", "kay", "kaise", "how", "who", "what", "which", "when", "show", "list", "tell",
     "batao", "sang", "sanga", "dakhva", "owe", "owes", "total", "hisab", "hishob",
+    "cuanto", "cuanta", "cuantos", "quien", "quienes", "que", "cual", "cuando", "dime", "muestrame",   # es
+    "magkano", "sino", "ilan", "ano", "kailan", "pakita",                                            # fil
+    "berapa", "siapa", "apa", "kapan", "tunjukkan", "lihat",                                         # id
 }
 INTENTS = ["customer_due", "customer_history", "top_due", "risky", "item_forecast", "item_sales",
            "order_plan", "sales_summary", "help"]
@@ -33,17 +39,21 @@ Q_SCHEMA = {
     },
     "required": ["intent", "customer", "item", "period"],
 }
-Q_SYSTEM = """You route questions from a kirana shopkeeper (Marathi/Hindi/English mixed) to one intent.
+Q_SYSTEM = """You route questions from a small shopkeeper (Marathi, Hindi, English, Spanish, Filipino or Indonesian, often mixed) to one intent.
 customer_due: how much a named person owes. customer_history: what a named person took or paid.
 top_due: who owes the most. risky: who may not pay back. item_forecast: how much of an item will be needed / to order.
 item_sales: how much of an item was sold. order_plan: what to order from the wholesaler.
 sales_summary: cash, udhaar, collection totals for a period. help: anything else.
-item in simple English (sakhar->sugar, tel->oil, tup->ghee). period: today, yesterday, week or month. JSON only."""
+item in simple English (sakhar/azúcar/asukal/gula->sugar, tel/aceite/mantika/minyak->oil). period: today, yesterday, week or month. JSON only."""
 
 
 # ---------------------------------------------------------------- routing
 def _tokens(text: str) -> list[str]:
-    return re.findall(r"[a-zऀ-ॿ]+|\d+", text.lower())
+    return [parser._fold(t) for t in parser._TOKEN.findall(text.lower())]
+
+
+_CRED = {parser._fold(w) for w in parser.CREDIT_WORDS}
+_PAY = {parser._fold(w) for w in parser.PAYMENT_WORDS}
 
 
 def is_question(text: str) -> bool:
@@ -52,8 +62,8 @@ def is_question(text: str) -> bool:
     toks = _tokens(text)
     if any(t in QUESTION_WORDS for t in toks):
         return True
-    has_num = any(t.isdigit() or t in parser.NUM_WORDS for t in toks)
-    has_signal = any(t in parser.CREDIT_WORDS or t in parser.PAYMENT_WORDS or t in parser.GLOSSARY for t in toks)
+    has_num = any(parser._numval(t) is not None or t in parser.NUM_WORDS for t in toks)
+    has_signal = any(t in _CRED or t in _PAY or t in parser.GLOSSARY for t in toks)
     return not (has_num and has_signal)
 
 
@@ -61,7 +71,7 @@ _ITEM_WORDS = {**{v: v for v in parser.GLOSSARY.values()}, **parser.GLOSSARY, "d
 
 
 def _item_in(text: str) -> str | None:
-    t = text.lower()
+    t = " ".join(_tokens(text))
     for k in sorted(_ITEM_WORDS, key=len, reverse=True):
         if re.search(rf"\b{re.escape(k)}\b", t):
             return _ITEM_WORDS[k]
@@ -69,13 +79,14 @@ def _item_in(text: str) -> str | None:
 
 
 def _period_in(toks: list[str]) -> str | None:
-    if {"yesterday", "kal", "kaal"} & set(toks):
+    t = set(toks)
+    if t & {"yesterday", "kal", "kaal", "ayer", "kahapon", "kemarin"}:
         return "yesterday"
-    if {"week", "hafta", "hafte", "athavda", "aathavda", "athavdyat"} & set(toks):
+    if t & {"week", "hafta", "hafte", "athavda", "aathavda", "athavdyat", "semana", "linggo", "minggu"}:
         return "week"
-    if {"month", "mahina", "mahine", "mahinyat"} & set(toks):
+    if t & {"month", "mahina", "mahine", "mahinyat", "mes", "buwan", "bulan"}:
         return "month"
-    if {"today", "aaj", "aj"} & set(toks):
+    if t & {"today", "aaj", "aj", "hoy", "ngayon", "hari", "ini"}:
         return "today"
     return None
 
@@ -83,18 +94,21 @@ def _period_in(toks: list[str]) -> str | None:
 def route_with_rules(text: str) -> dict:
     toks = set(_tokens(text))
     item, period = _item_in(text), _period_in(list(toks))
-    who = {"who", "kaun", "kon", "konala", "kuni", "konakade"} & toks
-    if who and toks & {"late", "risk", "dhoka", "nahi", "denge", "bharnar", "pay", "pays"}:
+    who = {"who", "kaun", "kon", "konala", "kuni", "konakade", "quien", "quienes", "sino", "siapa"} & toks
+    if who and toks & {"late", "risk", "dhoka", "nahi", "denge", "bharnar", "pay", "pays",
+                       "no", "pagara", "pagaran", "hindi", "magbabayad", "tidak", "bayar", "telat"}:
         intent = "risky"
     elif who:
         intent = "top_due"
-    elif toks & {"order", "mangva", "mangvaycha", "mangvayche", "wholesaler", "kharedi", "purchase"} and not item:
+    elif toks & {"order", "mangva", "mangvaycha", "mangvayche", "wholesaler", "kharedi", "purchase",
+                 "pedir", "pido", "surtir", "bibilhin", "kulakan", "belanja", "pesan"} and not item:
         intent = "order_plan"
-    elif item and toks & {"sold", "becha", "beche", "bika", "vikla", "vikli", "sale"}:
+    elif item and toks & {"sold", "becha", "beche", "bika", "vikla", "vikli", "sale", "vendi", "vendio", "naibenta", "terjual", "laku"}:
         intent = "item_sales"
     elif item:
         intent = "item_forecast"
-    elif toks & {"sale", "sales", "vikri", "becha", "galla", "cash", "collection", "vasuli", "jama", "hisab", "hishob"} or period:
+    elif toks & {"sale", "sales", "vikri", "becha", "galla", "cash", "collection", "vasuli", "jama", "hisab", "hishob",
+                 "ventas", "venta", "caja", "benta", "kita", "penjualan", "omzet"} or period:
         intent = "sales_summary"
     else:
         intent = "customer_due"  # resolved below; falls back to help if no customer found
@@ -179,8 +193,8 @@ def answer(text: str, insights: dict, lang: str = "en", use_gemma: bool = False)
         if intent == "customer_due":
             b = bal[cust["id"]]; r = risk.get(cust["name"])
             last = (b["last_payment"] or "")[:10]
-            out["answer"] = (f"{cust['name']} यांच्याकडे ₹{b['due']:,.0f} बाकी आहेत." if mr else
-                             f"{cust['name']} owes ₹{b['due']:,.0f}.") + (
+            out["answer"] = (f"{cust['name']} यांच्याकडे {CUR}{b['due']:,.0f} बाकी आहेत." if mr else
+                             f"{cust['name']} owes {CUR}{b['due']:,.0f}.") + (
                 (f" शेवटचे पैसे {last} ला दिले." if mr else f" Last paid on {last}.") if last else "")
             if r:
                 out["answer"] += (f" उशिरा भरण्याची शक्यता {round(r['risk']*100)}%." if mr else
@@ -195,22 +209,22 @@ def answer(text: str, insights: dict, lang: str = "en", use_gemma: bool = False)
                 (cust["id"],))]
             out["answer"] = f"{cust['name']} यांच्या शेवटच्या नोंदी:" if mr else f"Latest entries for {cust['name']}:"
             out["rows"] = [[r["ts"][:10], r["kind"], f"{r['qty'] or ''} {r['unit'] or ''} {r['item'] or ''}".strip(),
-                            f"₹{r['amount']:,.0f}"] for r in rows]
+                            f"{CUR}{r['amount']:,.0f}"] for r in rows]
             out["customer_id"] = cust["id"]
 
         elif intent == "top_due":
             top = sorted((b for b in bal.values() if b["due"] > 0), key=lambda b: -b["due"])[:5]
             total = sum(b["due"] for b in bal.values() if b["due"] > 0)
-            out["answer"] = (f"एकूण ₹{total:,.0f} बाकी. सर्वात जास्त:" if mr else
-                             f"₹{total:,.0f} is out on udhaar. Highest balances:")
-            out["rows"] = [[b["name"], f"₹{b['due']:,.0f}"] for b in top]
+            out["answer"] = (f"एकूण {CUR}{total:,.0f} बाकी. सर्वात जास्त:" if mr else
+                             f"{CUR}{total:,.0f} is out on udhaar. Highest balances:")
+            out["rows"] = [[b["name"], f"{CUR}{b['due']:,.0f}"] for b in top]
 
         elif intent == "risky":
             rk = [c for c in risk.values() if c["band"] != "ok"][:5]
             out["answer"] = ("हे ग्राहक उशिरा भरण्याची शक्यता आहे:" if mr else
                              "These customers are likely to pay late:") if rk else (
                 "सध्या कोणीही धोकादायक नाही." if mr else "Nobody looks risky right now.")
-            out["rows"] = [[c["customer"], f"₹{c['due']:,.0f}", f"{round(c['risk']*100)}%"] for c in rk]
+            out["rows"] = [[c["customer"], f"{CUR}{c['due']:,.0f}", f"{round(c['risk']*100)}%"] for c in rk]
             if rk:
                 out["actions"].append({"type": "remind", "customer": rk[0]["customer"], "due": rk[0]["due"]})
 
@@ -238,8 +252,8 @@ def answer(text: str, insights: dict, lang: str = "en", use_gemma: bool = False)
             a, b_, label = _period_range(con, q.get("period") or "week")
             r = con.execute("""SELECT COALESCE(SUM(qty),0) q, COALESCE(SUM(amount),0) amt, MAX(unit) unit FROM entries
                                WHERE item=? AND kind IN ('sale','credit') AND date(ts) BETWEEN ? AND ?""", (item, a, b_)).fetchone()
-            out["answer"] = (f"{label}: {r['q']:.1f} {r['unit'] or ''} {item}, ₹{r['amt']:,.0f}." if not mr else
-                             f"{item}: {r['q']:.1f} {r['unit'] or ''} विकले, ₹{r['amt']:,.0f}.")
+            out["answer"] = (f"{label}: {r['q']:.1f} {r['unit'] or ''} {item}, {CUR}{r['amt']:,.0f}." if not mr else
+                             f"{item}: {r['q']:.1f} {r['unit'] or ''} विकले, {CUR}{r['amt']:,.0f}.")
 
         elif intent == "sales_summary":
             a, b_, label = _period_range(con, q.get("period"))
@@ -248,8 +262,8 @@ def answer(text: str, insights: dict, lang: str = "en", use_gemma: bool = False)
                 COALESCE(SUM(CASE WHEN kind='credit' THEN amount END),0) credit,
                 COALESCE(SUM(CASE WHEN kind='payment' THEN amount END),0) paid
                 FROM entries WHERE date(ts) BETWEEN ? AND ?""", (a, b_)).fetchone()
-            out["answer"] = (f"रोख ₹{r['cash']:,.0f}, उधार ₹{r['credit']:,.0f}, वसूल ₹{r['paid']:,.0f}." if mr else
-                             f"{label.capitalize()}: ₹{r['cash']:,.0f} cash sales, ₹{r['credit']:,.0f} given on udhaar, ₹{r['paid']:,.0f} collected.")
+            out["answer"] = (f"रोख {CUR}{r['cash']:,.0f}, उधार {CUR}{r['credit']:,.0f}, वसूल {CUR}{r['paid']:,.0f}." if mr else
+                             f"{label.capitalize()}: {CUR}{r['cash']:,.0f} cash sales, {CUR}{r['credit']:,.0f} given on udhaar, {CUR}{r['paid']:,.0f} collected.")
 
         else:
             out["answer"] = ("मी नोंद लिहू शकतो किंवा विचारू शकता: \"Patil kaku kiti baki?\", \"kon jast baki?\", \"pudhchya athavdyat kiti sakhar?\"" if mr else
@@ -315,9 +329,9 @@ def brief(insights: dict, lang: str = "en") -> dict:
         amt = sum(c["due"] for c in risk)
         top = max(risk, key=lambda c: c["risk"] * c["due"])
         cards.append({"kind": "collect",
-                      "title": (f"{len(risk)} ग्राहकांकडून ₹{amt:,.0f} वसूल करा" if mr else f"Collect ₹{amt:,.0f} from {len(risk)} customers"),
-                      "body": (f"{top['customer']} सर्वात आधी: ₹{top['due']:,.0f}, {top['days_since_payment']} दिवसांपासून काही भरले नाही." if mr else
-                               f"Start with {top['customer']}: ₹{top['due']:,.0f} due, nothing paid in {top['days_since_payment']} days."),
+                      "title": (f"{len(risk)} ग्राहकांकडून {CUR}{amt:,.0f} वसूल करा" if mr else f"Collect {CUR}{amt:,.0f} from {len(risk)} customers"),
+                      "body": (f"{top['customer']} सर्वात आधी: {CUR}{top['due']:,.0f}, {top['days_since_payment']} दिवसांपासून काही भरले नाही." if mr else
+                               f"Start with {top['customer']}: {CUR}{top['due']:,.0f} due, nothing paid in {top['days_since_payment']} days."),
                       "names": [c["customer"] for c in risk],
                       "action": {"type": "remind", "customer": top["customer"], "due": top["due"]}})
     plan = order_plan(insights)
@@ -332,9 +346,9 @@ def brief(insights: dict, lang: str = "en") -> dict:
     if day:
         diff = round((day["cash"] / avg - 1) * 100) if avg else None
         cards.append({"kind": "day",
-                      "title": (f"{last}: रोख ₹{day['cash']:,.0f}" if mr else f"{_nice_day(last)}: ₹{day['cash']:,.0f} in cash sales"),
-                      "body": ((f"नेहमीपेक्षा {diff:+d}%. " if diff is not None else "") + f"उधार ₹{day['credit']:,.0f}, वसूल ₹{day['paid']:,.0f}." if mr else
-                               (f"{diff:+d}% vs a usual day. " if diff is not None else "") + f"₹{day['credit']:,.0f} given on udhaar, ₹{day['paid']:,.0f} collected."),
+                      "title": (f"{last}: रोख {CUR}{day['cash']:,.0f}" if mr else f"{_nice_day(last)}: {CUR}{day['cash']:,.0f} in cash sales"),
+                      "body": ((f"नेहमीपेक्षा {diff:+d}%. " if diff is not None else "") + f"उधार {CUR}{day['credit']:,.0f}, वसूल {CUR}{day['paid']:,.0f}." if mr else
+                               (f"{diff:+d}% vs a usual day. " if diff is not None else "") + f"{CUR}{day['credit']:,.0f} given on udhaar, {CUR}{day['paid']:,.0f} collected."),
                       "action": None})
     return {"cards": cards, "total_due": round(sum(b["due"] for b in bal if b["due"] > 0)),
             "accounts": sum(1 for b in bal if b["due"] > 0)}

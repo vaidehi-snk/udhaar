@@ -76,7 +76,8 @@ def health():
     except Exception:
         stt_ok = False
     return {"ollama": bool(models), "model": parser.MODEL, "model_ready": parser.MODEL in models,
-            "whisper": stt_ok, "tabpfn": predict.engine_name(), "demo": DEMO}
+            "whisper": stt_ok, "tabpfn": predict.engine_name(), "demo": DEMO, "currency": assistant.CUR,
+            "shop": os.environ.get("UDHAAR_SHOP", "Shree Ganesh Kirana"), "city": os.environ.get("UDHAAR_CITY", "Aurangabad")}
 
 
 @app.post("/api/text")
@@ -259,21 +260,35 @@ def backtest():
     return {"available": True, **json.loads(f.read_text())}
 
 
+# Offline fallbacks, so a reminder is always one tap away even with the model off.
+REMINDER_TEMPLATES = {
+    "marathi": "नमस्कार {n}, आपल्या खात्यावर {c}{d} बाकी आहेत. सवडीने भरून टाका. धन्यवाद! 🙏",
+    "hindi": "नमस्ते {n} जी, आपके खाते में {c}{d} बाकी हैं. जब सुविधा हो, चुका दीजिए. धन्यवाद! 🙏",
+    "english": "Hello {n}, a gentle reminder that {c}{d} is pending on your account. Whenever convenient. Thank you! 🙏",
+    "spanish": "Hola {n}, le recuerdo con cariño que tiene {c}{d} pendientes en su cuenta. Cuando pueda. ¡Gracias! 🙏",
+    "filipino": "Magandang araw po, {n}! Paalala lang po na may {c}{d} pa po sa listahan ninyo. Salamat po! 🙏",
+    "indonesian": "Halo {n}, sekadar mengingatkan ada {c}{d} yang belum dibayar di catatan warung. Terima kasih! 🙏",
+}
+
+
 @app.post("/api/reminder")
 def reminder(body: ReminderIn):
     """Gemma drafts a polite WhatsApp reminder the shopkeeper can send in one tap."""
-    prompt = (f"Write a short, warm WhatsApp message in {body.language} (use the native script) from a "
-              f"neighbourhood kirana shop owner to a regular customer, {body.customer}, gently reminding "
-              f"them that Rs {round(body.due)} is pending on their khata. Respectful, never threatening, "
+    lang = body.language.lower().replace("simple ", "")
+    due = f"{round(body.due):,}"
+    prompt = (f"Write a short, warm WhatsApp message in {lang} (native script) from the owner of a small "
+              f"neighbourhood grocery shop to a regular customer, {body.customer}, gently reminding them that "
+              f"{assistant.CUR}{due} is still pending on their credit account. Respectful, never threatening, "
               f"2-3 lines, end with a thank you. Output only the message.")
     try:
         r = httpx.post(f"{parser.OLLAMA_URL}/api/generate", timeout=60, json={
-            "model": parser.MODEL, "prompt": prompt, "stream": False, "options": {"temperature": 0.6, "num_ctx": parser.NUM_CTX, "num_predict": 200}, "keep_alive": "30m"})
+            "model": parser.MODEL, "prompt": prompt, "stream": False,
+            "options": {"temperature": 0.6, "num_ctx": parser.NUM_CTX, "num_predict": 200}, "keep_alive": "30m"})
         r.raise_for_status()
         return {"text": r.json()["response"].strip(), "engine": parser.MODEL}
     except Exception:
-        return {"text": f"नमस्कार {body.customer}, आपल्या खात्यावर ₹{round(body.due)} बाकी आहेत. "
-                        f"सवडीने भरून टाका. धन्यवाद! 🙏", "engine": "template"}
+        tpl = REMINDER_TEMPLATES.get(lang, REMINDER_TEMPLATES["english"])
+        return {"text": tpl.format(n=body.customer, c=assistant.CUR, d=due), "engine": "template"}
 
 
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")

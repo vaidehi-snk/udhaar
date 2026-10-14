@@ -3,125 +3,156 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#0B0D12">
+<meta name="color-scheme" content="dark">
 <title>Udhaar</title>
-<meta name="description" content="A local AI back-office for small shops. Speak entries, ask questions, get a daily briefing. Runs on the shop's own laptop.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='%230F6B4F'/%3E%3C/svg%3E">
+<meta name="description" content="A local AI back-office for the world's corner shops. Speak entries, ask questions, get a daily briefing. Runs on the shop's own laptop.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23F7C35F'/%3E%3Cstop offset='1' stop-color='%23FF7A59'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M10 9v8a6 6 0 0 0 12 0V9' fill='none' stroke='%230B0D12' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<header class="bar">
-  <div class="bar-in">
-    <div class="word"><i></i>udhaar</div>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M10 9v8a6 6 0 0 0 12 0V9"/></svg></span>
+      <span class="wordmark">udhaar</span>
+    </div>
+
+    <div class="shop">
+      <div class="shop-name" id="shopName">Shree Ganesh Kirana</div>
+      <div class="shop-meta" id="shopMeta">Aurangabad · 15 accounts</div>
+    </div>
+
     <nav class="tabs" aria-label="Sections">
-      <button data-view="today" aria-current="page" data-i18n="nav.today">Today</button>
-      <button data-view="customers" data-i18n="nav.customers">Customers</button>
-      <button data-view="forecast" data-i18n="nav.forecast">Forecast</button>
-      <button data-view="hood" data-i18n="nav.hood">Under the hood</button>
+      <button data-view="today" aria-current="page"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg><span data-i18n="nav.today">Today</span></button>
+      <button data-view="customers"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg><span data-i18n="nav.customers">Customers</span></button>
+      <button data-view="forecast"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M5 16l4.5-5 3.5 3 6-7"/><path d="M15 7h4v4"/></svg><span data-i18n="nav.forecast">Forecast</span></button>
+      <button data-view="hood"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9zM9 1.5V4M15 1.5V4M9 20v2.5M15 20v2.5M1.5 9H4M1.5 15H4M20 9h2.5M20 15h2.5"/></svg><span data-i18n="nav.hood">Under the hood</span></button>
     </nav>
-    <div class="bar-r">
-      <button class="local" id="localBtn" title="What runs where"><i class="dot" id="localDot"></i><span id="localText">Local</span></button>
+
+    <div class="side-foot">
+      <button class="engine" id="localBtn" title="What runs where">
+        <span class="engine-row"><i class="dot" id="localDot"></i><span id="localText">Local</span></span>
+        <span class="engine-sub" id="engineSub">Nothing leaves this laptop</span>
+      </button>
       <div class="lang" role="group" aria-label="Language">
-        <button data-lang="en" aria-pressed="true">EN</button><button data-lang="mr" aria-pressed="false">मराठी</button>
+        <button data-lang="en" aria-pressed="true">English</button><button data-lang="mr" aria-pressed="false">मराठी</button>
       </div>
     </div>
-  </div>
-</header>
+  </aside>
 
-<main>
-  <div class="demo" id="demo" hidden data-i18n="demo"></div>
+  <main>
+    <div class="demo" id="demo" hidden data-i18n="demo"></div>
 
-  <!-- TODAY -->
-  <section class="view active" id="v-today">
-    <h1 class="hello" id="hello"></h1>
-    <div class="sub" id="todaySub"></div>
+    <!-- TODAY -->
+    <section class="view active" id="v-today">
+      <header class="head">
+        <div>
+          <div class="date" id="today"></div>
+          <h1 class="hello" id="hello"></h1>
+        </div>
+        <div class="chips" id="headChips"></div>
+      </header>
 
-    <div class="cmd">
-      <form id="cmd" autocomplete="off">
-        <input id="q" aria-label="Write an entry or ask a question">
-        <button type="button" class="mic" id="mic" aria-label="Speak">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12h-2Z"/></svg>
-        </button>
-        <button class="go" id="goBtn" data-i18n="cmd.go">Enter</button>
-      </form>
-      <div class="hints" id="hints"></div>
+      <div class="cmd" id="cmdWrap">
+        <form id="cmd" autocomplete="off">
+          <span class="spark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>
+          <input id="q" aria-label="Write an entry or ask a question">
+          <button type="button" class="mic" id="mic" aria-label="Speak">
+            <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+            <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          </button>
+          <button class="go" id="goBtn"><span data-i18n="cmd.go">Enter</span><kbd>↵</kbd></button>
+        </form>
+        <div class="hints" id="hints"></div>
+      </div>
       <div id="reply"></div>
-    </div>
 
-    <section class="brief">
-      <h2 class="h"><span style="color:var(--ink);font-size:15px;font-weight:600" data-i18n="brief.title">Today's briefing</span><span id="briefMeta"></span></h2>
-      <ol id="brief"><li><div class="skel" style="grid-column:1/-1"></div></li></ol>
+      <div class="kpis" id="kpis">
+        <div class="kpi skel-k"></div><div class="kpi skel-k"></div><div class="kpi skel-k"></div><div class="kpi skel-k"></div>
+      </div>
+
+      <section class="block">
+        <div class="block-h"><h2 data-i18n="brief.title">Today's briefing</h2><span class="muted" id="briefMeta"></span></div>
+        <div class="brief" id="brief"><div class="card skel-k"></div><div class="card skel-k"></div><div class="card skel-k"></div></div>
+      </section>
+
+      <div class="two">
+        <section class="card pad">
+          <div class="block-h"><h2 data-i18n="recent.title">Recent entries</h2><span class="muted" id="recentMeta"></span></div>
+          <ul class="feed" id="recent"></ul>
+        </section>
+        <section class="card pad">
+          <div class="block-h"><h2 data-i18n="bal.title">Udhaar balances</h2><span class="muted" id="balMeta"></span></div>
+          <ul class="bal" id="bal"></ul>
+        </section>
+      </div>
     </section>
 
-    <div class="two">
-      <section>
-        <h2 class="h"><span style="color:var(--ink);font-size:15px;font-weight:600" data-i18n="recent.title">Recent entries</span><span id="recentMeta"></span></h2>
-        <ul class="list" id="recent"></ul>
-      </section>
-      <section>
-        <h2 class="h"><span style="color:var(--ink);font-size:15px;font-weight:600" data-i18n="bal.title">Udhaar balances</span><span id="balMeta"></span></h2>
-        <ul class="list bal" id="bal"></ul>
-      </section>
-    </div>
-  </section>
-
-  <!-- CUSTOMERS -->
-  <section class="view" id="v-customers">
-    <div class="cust">
-      <div class="people">
-        <input id="search" type="search" data-i18n-ph="cust.search">
-        <div class="seg" role="group">
-          <button data-sort="risk" aria-pressed="true" data-i18n="cust.risk">Risk</button>
-          <button data-sort="due" aria-pressed="false" data-i18n="cust.due">Due</button>
-          <button data-sort="name" aria-pressed="false" data-i18n="cust.name">Name</button>
+    <!-- CUSTOMERS -->
+    <section class="view" id="v-customers">
+      <header class="head"><div><div class="date" data-i18n="cust.kicker">Credit accounts</div><h1 class="hello" data-i18n="nav.customers">Customers</h1></div></header>
+      <div class="cust">
+        <div class="card people">
+          <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input id="search" type="search" data-i18n-ph="cust.search"></div>
+          <div class="seg" role="group">
+            <button data-sort="risk" aria-pressed="true" data-i18n="cust.risk">Risk</button>
+            <button data-sort="due" aria-pressed="false" data-i18n="cust.due">Due</button>
+            <button data-sort="name" aria-pressed="false" data-i18n="cust.name">Name</button>
+          </div>
+          <ul id="people"></ul>
         </div>
-        <ul id="people"></ul>
+        <div class="card pad-l" id="detail"><div class="skel"></div><div class="skel"></div></div>
       </div>
-      <div id="detail"><div class="skel"></div><div class="skel"></div></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- FORECAST -->
-  <section class="view" id="v-forecast">
-    <div class="fc-head">
-      <div><h1 class="hello" id="fcTitle"></h1><div class="sub" id="fcSub"></div></div>
-      <button class="btn green" id="orderBtn" data-i18n="fc.order">Draft wholesaler order</button>
-    </div>
-    <div class="fc-grid">
-      <div>
-        <table class="t"><thead><tr id="fcHead"></tr></thead><tbody id="fcBody"></tbody></table>
-        <div class="note" id="fcNote"></div>
+    <!-- FORECAST -->
+    <section class="view" id="v-forecast">
+      <header class="head">
+        <div><div class="date" data-i18n="fc.kicker">Stock plan · TabPFN</div><h1 class="hello" id="fcTitle"></h1><div class="sub" id="fcSub"></div></div>
+        <button class="btn primary" id="orderBtn"><svg viewBox="0 0 24 24"><path d="M4 5h2l2 11h10l2-8H7"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg><span data-i18n="fc.order">Draft wholesaler order</span></button>
+      </header>
+      <div class="fc-grid">
+        <div class="card">
+          <table class="t"><thead><tr id="fcHead"></tr></thead><tbody id="fcBody"></tbody></table>
+          <div class="note pad-x" id="fcNote"></div>
+        </div>
+        <div class="card pad stick">
+          <div class="block-h"><h2 id="itemTitle"></h2></div>
+          <div class="legend"><span><i class="lg-f"></i><span data-i18n="fc.daily">Forecast per day</span></span><span><i class="dash"></i><span data-i18n="fc.usual">Usual day</span></span></div>
+          <div id="itemChart"></div>
+        </div>
       </div>
-      <div class="stick">
-        <h2 class="h" id="itemTitle"></h2>
-        <div class="legend"><span><i></i><span data-i18n="fc.daily">Forecast per day</span></span><span><i class="dash"></i><span data-i18n="fc.usual">Usual day</span></span></div>
-        <div id="itemChart"></div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- UNDER THE HOOD -->
-  <section class="view" id="v-hood">
-    <h1 class="hello" data-i18n="hood.title">What runs where</h1>
-    <div class="sub" data-i18n="hood.sub">Every model is open. Everything except optional anonymous numbers stays on the shop's laptop.</div>
-    <div class="steps" id="steps" style="margin-top:28px"></div>
-    <div class="priv">
-      <div><h2 class="h" data-i18n="hood.stays">Never leaves the laptop</h2><ul id="stays"></ul></div>
-      <div><h2 class="h" data-i18n="hood.leaves">Can leave, only if you allow it</h2><ul id="leaves"></ul></div>
-    </div>
-    <div class="fc-grid">
-      <div><h2 class="h" data-i18n="hood.bt">Tested on weeks the models never saw</h2><div id="bt"></div></div>
-      <div><h2 class="h" data-i18n="hood.weeks">Week by week</h2>
-        <div class="legend"><span><i></i><span data-i18n="w.cash">Cash sales</span></span><span><i style="background:var(--risk)"></i><span data-i18n="w.credit">Udhaar given</span></span><span><i style="background:var(--accent)"></i><span data-i18n="w.paid">Collected</span></span></div>
-        <div id="weeks"></div></div>
-    </div>
-  </section>
-</main>
+    <!-- UNDER THE HOOD -->
+    <section class="view" id="v-hood">
+      <header class="head"><div><div class="date" data-i18n="hood.kicker">Open models, one laptop</div><h1 class="hello" data-i18n="hood.title">What runs where</h1><div class="sub" data-i18n="hood.sub"></div></div></header>
+      <div class="steps" id="steps"></div>
+      <div class="priv">
+        <div class="card pad"><div class="block-h"><h2 data-i18n="hood.stays">Never leaves the laptop</h2></div><ul class="plist" id="stays"></ul></div>
+        <div class="card pad"><div class="block-h"><h2 data-i18n="hood.leaves">Can leave, only if you allow it</h2></div><ul class="plist" id="leaves"></ul></div>
+      </div>
+      <div class="fc-grid">
+        <div class="card pad"><div class="block-h"><h2 data-i18n="hood.bt">Tested on weeks the models never saw</h2></div><div id="bt"></div></div>
+        <div class="card pad"><div class="block-h"><h2 data-i18n="hood.weeks">Week by week</h2></div>
+          <div class="legend"><span><i style="background:var(--ink-2)"></i><span data-i18n="w.cash">Cash sales</span></span><span><i style="background:var(--risk)"></i><span data-i18n="w.credit">Udhaar given</span></span><span><i style="background:var(--accent)"></i><span data-i18n="w.paid">Collected</span></span></div>
+          <div id="weeks"></div></div>
+      </div>
+    </section>
+  </main>
+</div>
 
 <dialog id="dlg">
-  <h3 id="dlgTitle"></h3><p id="dlgSub"></p>
+  <div class="dlg-h"><h3 id="dlgTitle"></h3>
+    <select id="dlgLang" aria-label="Reminder language">
+      <option value="marathi">मराठी</option><option value="hindi">हिंदी</option><option value="english">English</option>
+      <option value="spanish">Español</option><option value="filipino">Filipino</option><option value="indonesian">Bahasa Indonesia</option>
+    </select></div>
+  <p id="dlgSub"></p>
   <textarea id="dlgText"></textarea>
-  <div class="row"><button class="btn" id="dlgClose" data-i18n="dlg.close">Close</button><button class="btn" id="dlgCopy" data-i18n="dlg.copy">Copy</button><a class="btn green" id="dlgWa" target="_blank" rel="noopener" data-i18n="dlg.wa">Send on WhatsApp</a></div>
+  <div class="row"><button class="btn" id="dlgClose" data-i18n="dlg.close">Close</button><button class="btn" id="dlgCopy" data-i18n="dlg.copy">Copy</button><a class="btn wa" id="dlgWa" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/></svg><span data-i18n="dlg.wa">Send on WhatsApp</span></a></div>
 </dialog>
 <div class="toast" id="toast" role="status"></div>
 <script src="/static/app.js"></script>
