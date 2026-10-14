@@ -1,0 +1,19 @@
+# Hosted demo for judges: sample shop data, typed entries (rules parser), TabPFN predictions.
+# Real shops run Udhaar on their own laptop with Whisper + Gemma (see README).
+services:
+  - type: web
+    name: udhaar-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-demo.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: UDHAAR_DEMO
+        value: "1"
+      - key: UDHAAR_NO_LOCAL_TABPFN
+        value: "1"
+      - key: TABPFN_TOKEN
+        sync: false   # paste your key in the Render dashboard
+      - key: PYTHON_VERSION
+        value: "3.11.9"

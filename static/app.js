@@ -1,0 +1,427 @@
+/* Udhaar front end. No build step and no CDN, so it works with the internet off. */
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------------- words ---------------- */
+const T = {
+  en: {
+    "nav.today": "Today", "nav.customers": "Customers", "nav.forecast": "Forecast", "nav.hood": "Under the hood",
+    demo: "<b>Live demo</b> with a sample shop's 13 months of history. Type to try it. On the shop's own laptop you can also speak.",
+    "cmd.go": "Enter", "brief.title": "Today's briefing", "recent.title": "Recent entries", "bal.title": "Udhaar balances",
+    "cust.search": "Search customers", "cust.risk": "Risk", "cust.due": "Due", "cust.name": "Name",
+    "fc.order": "Draft wholesaler order", "fc.daily": "Forecast per day", "fc.usual": "Usual day",
+    "hood.title": "What runs where", "hood.sub": "Every model is open. Everything except optional anonymous numbers stays on the shop's laptop.",
+    "hood.stays": "Never leaves the laptop", "hood.leaves": "Can leave, only if you allow it", "hood.bt": "Tested on weeks the models never saw", "hood.weeks": "Week by week",
+    "w.cash": "Cash sales", "w.credit": "Udhaar given", "w.paid": "Collected",
+    "dlg.close": "Close", "dlg.copy": "Copy", "dlg.wa": "Send on WhatsApp",
+    hello: h => h < 12 ? "Good morning." : h < 17 ? "Good afternoon." : "Good evening.",
+    sub: (due, n) => `${due} is out on udhaar across ${n} customers.`,
+    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "Who owes the most?", "How much sugar next week?", "Sharma ji ne 500 jama kiye", "Aaj ka hisab"],
+    hintsK: "Try", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Who owes the most?", "How much sugar next week?", "What should I order?", "Aaj ka hisab"],
+    listening: "Listening… tap again to stop", working: "Working…",
+    kind: { credit: "Udhaar", sale: "Cash sale", payment: "Paid back" }, band: { high: "Likely late", watch: "Watch", ok: "Reliable" },
+    walkin: "Walk-in", written: "Written to the khata", checking: "Gemma checking…", corrected: e => `Corrected by ${e}`, confirmed: e => `Checked by ${e} ✓`, undo: "Undo", removed: "Removed",
+    by: (e, ms) => `${e === "rules" ? "rules fallback" : e} · ${ms}`,
+    remind: "Draft reminder", order: "Draft order", openCust: "Open",
+    briefKind: { collect: "Collect", order: "Order", day: "Yesterday" },
+    entries: n => `${n} shown`, accounts: n => `${n} accounts`,
+    noVoice: "Speaking works on the shop's laptop. In this demo, type instead.", micBlocked: "The browser blocked the microphone. Open Udhaar on localhost or with serve_https.py.",
+    owes: "owes", lastPaid: d => `last paid ${d} days ago`, chance: "chance they pay back less than half within 30 days",
+    why: "Why", whyNote: "The signals TabPFN used, compared with this shop's other customers.",
+    since: (d, g) => `No payment in ${d} days. Usually pays every ${g}.`, sinceOk: (d, g) => `Paid ${d} days ago. Usually pays every ${g}.`,
+    ratioBad: p => `Has paid back ${p}% of all udhaar taken.`, ratioOk: p => `Has paid back ${p}% of all udhaar taken.`,
+    recentBad: a => `Took ${a} on udhaar in the last 30 days, more than most.`, dueBad: x => `Owes ${x}× a typical balance.`,
+    facts: ["Udhaar taken", "Paid back", "Entries"], balance: "Balance over time", history: "Entries",
+    noCust: "No udhaar accounts yet. They appear when someone takes goods on credit.",
+    fcTitle: (f, d) => f ? `${f} is ${d} days away` : "The next 7 days",
+    fcSub: f => f ? "TabPFN compares the two weeks before the festival with a normal fortnight, using this shop's past festivals." : "No festival close by. This is a normal week's forecast.",
+    fcCols: f => f ? ["Item", "Normal 2 wks", "Festival 2 wks", "Change", "Order extra"] : ["Item", "Usual week", "Next 7 days", "Change", "Order extra"],
+    fcNote: (e, n, s) => `${e} · ${n} training rows · ${s}`, itemTitle: i => `${i}, day by day`,
+    reminderFor: n => `Reminder for ${n}`, reminderSub: "Drafted by Gemma on this laptop. Edit before sending.",
+    orderT: "Order for the wholesaler", orderSub: "From the forecast. Edit quantities before sending.", copied: "Copied",
+    gemmaWriting: "Writing…",
+    stages: [["Speak or type", "Marathi, Hindi, English, or all three"], ["Whisper", "faster-whisper turns speech into text"], ["Gemma 3", "Decides: write an entry, or answer a question"], ["SQLite", "The khata. Every number comes from here"], ["TabPFN", "Late-payment risk and festival forecast"]],
+    where: { local: "on the laptop", off: "not running", cloud: "API, numbers only", rules: "rules fallback", base: "baseline model" },
+    stays: ["<b>The voice recording.</b> Transcribed locally, then deleted.", "<b>Names, phone numbers, amounts.</b> One file: <code>data/udhaar.db</code>.", "<b>Understanding sentences.</b> Gemma runs in Ollama. No internet needed."],
+    leaves: ["<b>Anonymous numbers for TabPFN-3.5:</b> amounts, day counts, weekdays. No names, no items.", "<b>Nothing at all</b> if you install TabPFN's open weights locally.", "<b>Reminders and orders</b> are sent by the shopkeeper, from their own WhatsApp."],
+    bt: { win: "Window", naive: "Usual average", hgb: "Gradient boosting", tab: "TabPFN", wape: "Forecast error (WAPE), lower is better.", model: "Late-payment model", rule: "“Unpaid for a month” rule", auc: "AUC", hit: "Hit rate", cap: n => `Scored on 14-day snapshots over 6 months, n = ${n}.`, demo: "Sample shop data.", none: "Run python scripts/backtest.py to fill this in." },
+    localText: h => h.model_ready ? "Local AI on" : "Local · rules mode",
+  },
+  mr: {
+    "nav.today": "आज", "nav.customers": "ग्राहक", "nav.forecast": "अंदाज", "nav.hood": "आत काय चालते",
+    demo: "<b>थेट डेमो</b>: नमुना दुकानाचा 13 महिन्यांचा इतिहास. टाइप करून पाहा. दुकानाच्या लॅपटॉपवर बोलूनही वापरता येते.",
+    "cmd.go": "लिहा", "brief.title": "आजचा आढावा", "recent.title": "शेवटच्या नोंदी", "bal.title": "उधारी",
+    "cust.search": "ग्राहक शोधा", "cust.risk": "धोका", "cust.due": "बाकी", "cust.name": "नाव",
+    "fc.order": "होलसेल ऑर्डर तयार करा", "fc.daily": "रोजचा अंदाज", "fc.usual": "नेहमीचा दिवस",
+    "hood.title": "काय कुठे चालते", "hood.sub": "सर्व मॉडेल्स open आहेत. ऐच्छिक निनावी आकडे सोडले तर सर्व काही दुकानाच्या लॅपटॉपवरच राहते.",
+    "hood.stays": "लॅपटॉपबाहेर कधीच जात नाही", "hood.leaves": "परवानगी दिली तरच बाहेर जाते", "hood.bt": "मॉडेल्सनी न पाहिलेल्या आठवड्यांवर चाचणी", "hood.weeks": "आठवड्यानुसार",
+    "w.cash": "रोख विक्री", "w.credit": "उधार दिले", "w.paid": "वसूल",
+    "dlg.close": "बंद", "dlg.copy": "कॉपी", "dlg.wa": "WhatsApp वर पाठवा",
+    hello: h => h < 12 ? "सुप्रभात." : h < 17 ? "नमस्कार." : "शुभ संध्याकाळ.",
+    sub: (due, n) => `${n} ग्राहकांकडे एकूण ${due} उधार बाकी.`,
+    ph: ["Patil kaku, 2 kilo sakhar, 92 udhaar", "कोणाकडे सर्वात जास्त बाकी?", "Pudhchya athavdyat kiti sakhar?", "Sharma ji ne 500 jama kiye", "Aaj ka hisab"],
+    hintsK: "उदा.", hints: ["Patil kaku 2 kilo sakhar 92 udhaar", "Kon jast baki?", "Pudhchya athavdyat kiti sakhar?", "Kay mangvaycha?", "Aaj ka hisab"],
+    listening: "ऐकत आहे… थांबवण्यासाठी पुन्हा टॅप करा", working: "करत आहे…",
+    kind: { credit: "उधार", sale: "रोख", payment: "जमा" }, band: { high: "उशीर शक्य", watch: "लक्ष ठेवा", ok: "भरवशाचे" },
+    walkin: "रोख ग्राहक", written: "खात्यात लिहिले", checking: "Gemma तपासत आहे…", corrected: e => `${e} ने दुरुस्त केले`, confirmed: e => `${e} ने तपासले ✓`, undo: "मागे घ्या", removed: "काढले",
+    by: (e, ms) => `${e === "rules" ? "नियम पद्धत" : e} · ${ms}`,
+    remind: "आठवण तयार करा", order: "ऑर्डर तयार करा", openCust: "उघडा",
+    briefKind: { collect: "वसुली", order: "ऑर्डर", day: "काल" },
+    entries: n => `${n} नोंदी`, accounts: n => `${n} खाती`,
+    noVoice: "बोलणे दुकानाच्या लॅपटॉपवर चालते. या डेमोमध्ये टाइप करा.", micBlocked: "ब्राउझरने माइक अडवला. localhost किंवा serve_https.py ने उघडा.",
+    owes: "बाकी", lastPaid: d => `शेवटचे ${d} दिवसांपूर्वी भरले`, chance: "३० दिवसांत अर्ध्यापेक्षा कमी भरण्याची शक्यता",
+    why: "का?", whyNote: "TabPFN ने वापरलेले संकेत, दुकानाच्या इतर ग्राहकांशी तुलना करून.",
+    since: (d, g) => `${d} दिवस काही भरले नाही. सहसा दर ${g} दिवसांनी भरतात.`, sinceOk: (d, g) => `${d} दिवसांपूर्वी भरले. सहसा दर ${g} दिवसांनी.`,
+    ratioBad: p => `घेतलेल्या उधारीपैकी ${p}% परत केले.`, ratioOk: p => `घेतलेल्या उधारीपैकी ${p}% परत केले.`,
+    recentBad: a => `गेल्या ३० दिवसांत ${a} उधार, बहुतेकांपेक्षा जास्त.`, dueBad: x => `सामान्य बाकीच्या ${x} पट.`,
+    facts: ["एकूण उधार", "परत केले", "नोंदी"], balance: "बाकी कशी बदलली", history: "नोंदी",
+    noCust: "अजून उधार खाती नाहीत.",
+    fcTitle: (f, d) => f ? `${f} ला ${d} दिवस` : "पुढचे ७ दिवस",
+    fcSub: f => f ? "मागच्या सणांवरून TabPFN सणाआधीच्या दोन आठवड्यांची नेहमीच्या पंधरवड्याशी तुलना करते." : "जवळ सण नाही. हा नेहमीच्या आठवड्याचा अंदाज आहे.",
+    fcCols: f => f ? ["माल", "नेहमी २ आठवडे", "सण २ आठवडे", "फरक", "जास्त मागवा"] : ["माल", "नेहमीचा आठवडा", "पुढचे ७ दिवस", "फरक", "जास्त मागवा"],
+    fcNote: (e, n, s) => `${e} · ${n} ओळी · ${s}`, itemTitle: i => `${i}, रोजचा अंदाज`,
+    reminderFor: n => `${n} यांना आठवण`, reminderSub: "Gemma ने या लॅपटॉपवर लिहिले. पाठवण्यापूर्वी बदला.",
+    orderT: "होलसेलरसाठी ऑर्डर", orderSub: "अंदाजावरून. पाठवण्यापूर्वी आकडे तपासा.", copied: "कॉपी केले",
+    gemmaWriting: "लिहित आहे…",
+    stages: [["बोला किंवा लिहा", "मराठी, हिंदी, इंग्रजी किंवा मिसळून"], ["Whisper", "आवाजाचा मजकूर करते"], ["Gemma 3", "ठरवते: नोंद लिहायची की उत्तर द्यायचे"], ["SQLite", "खाते. प्रत्येक आकडा इथूनच"], ["TabPFN", "उशिरा भरणी आणि सणाचा अंदाज"]],
+    where: { local: "लॅपटॉपवर", off: "बंद", cloud: "API, फक्त आकडे", rules: "नियम पद्धत", base: "साधे मॉडेल" },
+    stays: ["<b>आवाजाचे रेकॉर्डिंग.</b> इथेच मजकूर होऊन पुसले जाते.", "<b>नावे, फोन नंबर, रक्कम.</b> एकच फाइल: <code>data/udhaar.db</code>.", "<b>वाक्य समजणे.</b> Gemma Ollama मध्ये चालते. इंटरनेट लागत नाही."],
+    leaves: ["<b>TabPFN-3.5 साठी निनावी आकडे:</b> रक्कम, दिवस, वार. नावे नाहीत, माल नाही.", "<b>काहीच नाही</b>, जर TabPFN चे open weights लॅपटॉपवर लावले.", "<b>आठवण आणि ऑर्डर</b> दुकानदार स्वतःच्या WhatsApp वरून पाठवतात."],
+    bt: { win: "कालावधी", naive: "नेहमीची सरासरी", hgb: "Gradient boosting", tab: "TabPFN", wape: "अंदाजातील चूक (WAPE), कमी तितके चांगले.", model: "उशिरा भरणी मॉडेल", rule: "“महिनाभर भरले नाही” नियम", auc: "AUC", hit: "अचूकता", cap: n => `६ महिन्यांतील दर १४ दिवसांच्या नोंदींवर, n = ${n}.`, demo: "नमुना दुकानाच्या नोंदी.", none: "python scripts/backtest.py चालवा." },
+    localText: h => h.model_ready ? "स्थानिक AI चालू" : "स्थानिक · नियम पद्धत",
+  },
+};
+let lang = (() => { try { return localStorage.getItem("udhaar.lang") || "en"; } catch { return "en"; } })();
+const L = () => T[lang];
+const tr = k => T[lang][k] ?? T.en[k] ?? k;
+const loc = () => (lang === "mr" ? "mr-IN-u-nu-latn" : "en-IN");
+const inr = n => "₹" + Math.round(n || 0).toLocaleString("en-IN");
+const num = n => Math.round(n || 0).toLocaleString("en-IN");
+const ITEM_MR = { sugar: "साखर", oil: "तेल", rice: "तांदूळ", atta: "आटा", "toor dal": "तूर डाळ", milk: "दूध", onion: "कांदा", potato: "बटाटा", tea: "चहा पत्ती", noodles: "नूडल्स", soap: "साबण", biscuits: "बिस्किटे", ghee: "तूप", besan: "बेसन", rava: "रवा", maida: "मैदा", eggs: "अंडी", salt: "मीठ" };
+const itemName = i => (lang === "mr" ? ITEM_MR[i] || i : i);
+const FEST = { "2025-09-22": ["Navratri", "नवरात्र"], "2025-10-21": ["Diwali", "दिवाळी"], "2026-03-19": ["Gudi Padwa", "गुढीपाडवा"], "2026-09-14": ["Ganesh Chaturthi", "गणेश चतुर्थी"], "2026-10-11": ["Navratri", "नवरात्र"], "2026-11-08": ["Diwali", "दिवाळी"] };
+const festName = d => (FEST[d] || ["The festival", "सण"])[lang === "mr" ? 1 : 0];
+const UNIT = { milk: "l", oil: "l", eggs: "dz", noodles: "pkt", biscuits: "pkt", tea: "pkt", soap: "pc" };
+const unit = i => UNIT[i] || "kg";
+const shortDate = iso => new Date(iso).toLocaleDateString(loc(), { day: "numeric", month: "short" });
+
+/* ---------------- plumbing ---------------- */
+const S = { health: null, ledger: null, ins: null, brief: null, summary: null, bt: null, sel: null, cust: null, item: null, sort: "risk" };
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+const post = (p, b) => api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+function toast(msg, action) {
+  const el = $("#toast"); el.innerHTML = `<span>${esc(msg)}</span>`;
+  if (action) { const b = document.createElement("button"); b.textContent = action.label; b.onclick = action.fn; el.append(b); }
+  el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), action ? 6000 : 2400);
+}
+
+/* ---------------- nav + language ---------------- */
+let current = "today";
+function go(view) {
+  current = view;
+  $$("nav.tabs button").forEach(b => b.dataset.view === view ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  $$(".view").forEach(v => v.classList.toggle("active", v.id === "v-" + view));
+  if (view === "customers" && !S.sel) pickFirst();
+  if (view === "hood" && !S.summary) loadHood();
+  window.scrollTo(0, 0);
+  try { history.replaceState(null, "", "#" + view); } catch {}
+}
+$$("nav.tabs button").forEach(b => b.onclick = () => go(b.dataset.view));
+$("#localBtn").onclick = () => go("hood");
+$$(".lang button").forEach(b => b.onclick = async () => {
+  lang = b.dataset.lang; try { localStorage.setItem("udhaar.lang", lang); } catch {}
+  applyLang(); S.brief = await api(`/api/brief?lang=${lang}`).catch(() => S.brief); renderBrief();
+});
+function applyLang() {
+  document.documentElement.lang = lang;
+  $$("[data-i18n]").forEach(el => { el.innerHTML = tr(el.dataset.i18n); });
+  $$("[data-i18n-ph]").forEach(el => { el.placeholder = tr(el.dataset.i18nPh); });
+  $$(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  $("#hello").textContent = L().hello(new Date().getHours());
+  $("#q").placeholder = L().ph[0];
+  $("#hints").innerHTML = `<span class="k">${L().hintsK}</span>` + L().hints.map(h => `<button type="button">${esc(h)}</button>`).join("");
+  $$("#hints button").forEach(b => b.onclick = () => { $("#q").value = b.textContent; submit(); });
+  renderAll();
+}
+
+/* rotating placeholder: shows both jobs of the box */
+let phI = 0;
+setInterval(() => { if (document.activeElement !== $("#q") && !$("#q").value) { phI = (phI + 1) % L().ph.length; $("#q").placeholder = L().ph[phI]; } }, 3200);
+
+/* ---------------- the command box ---------------- */
+$("#cmd").onsubmit = e => { e.preventDefault(); submit(); };
+async function submit() {
+  const text = $("#q").value.trim(); if (!text) return;
+  $("#goBtn").disabled = true; $("#reply").innerHTML = `<div class="reply"><div class="q">${esc(text)}</div><div class="a faint">${L().working}</div></div>`;
+  try { show(await post("/api/ask", { text, lang })); $("#q").value = ""; }
+  catch (e) { $("#reply").innerHTML = ""; toast(e.message); }
+  finally { $("#goBtn").disabled = false; }
+}
+let rec, chunks = [];
+$("#mic").onclick = async () => {
+  if (S.health && !S.health.whisper) { toast(L().noVoice); $("#q").focus(); return; }
+  if (rec && rec.state === "recording") { rec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    rec = new MediaRecorder(stream); chunks = [];
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = async () => {
+      stream.getTracks().forEach(x => x.stop()); $("#mic").classList.remove("rec");
+      $("#reply").innerHTML = `<div class="reply"><div class="a faint">${L().working}</div></div>`;
+      const fd = new FormData(); fd.append("audio", new Blob(chunks, { type: rec.mimeType }), "clip.webm");
+      try { show(await api(`/api/voice?lang=${lang}`, { method: "POST", body: fd })); } catch (e) { $("#reply").innerHTML = ""; toast(e.message); }
+    };
+    rec.start(); $("#mic").classList.add("rec"); $("#q").placeholder = L().listening;
+  } catch { toast(L().micBlocked); }
+};
+
+function show(r, note = "") {
+  const meta = r.mode === "entry" ? (note || L().by(r.parsed._engine, (r.parsed._ms / 1000).toFixed(1) + "s") + (r.refine ? " · " + L().checking : "")) : L().by(r.engine, (r.ms / 1000).toFixed(1) + "s");
+  const stt = r.stt_ms ? ` · whisper ${(r.stt_ms / 1000).toFixed(1)}s` : "";
+  let body;
+  if (r.mode === "entry") {
+    const p = r.parsed;
+    const items = (p.items || []).map(i => `<span class="chip">${esc(itemName(i.name))}${i.qty != null ? " · " + i.qty + (i.unit ? " " + esc(i.unit) : "") : ""}</span>`).join("");
+    body = `<div class="entry-line"><span class="tag ${p.kind}">${L().kind[p.kind]}</span><b>${esc(p.customer || L().walkin)}</b>${items}<span style="margin-left:auto;font-weight:600">${p.total != null ? inr(p.total) : ""}</span></div>
+      <div class="acts"><button class="btn link" id="undoBtn">${L().undo}</button></div>`;
+  } else {
+    const rows = (r.rows || []).map(row => `<tr>${row.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
+    const acts = (r.actions || []).map((a, i) => `<button class="btn" data-act="${i}">${a.type === "remind" ? L().remind : L().order}</button>`).join("")
+      + (r.customer_id ? `<button class="btn link" data-open="${r.customer_id}">${L().openCust} →</button>` : "");
+    body = `<div class="a">${esc(r.answer)}</div>${rows ? `<table><tbody>${rows}</tbody></table>` : ""}${acts ? `<div class="acts">${acts}</div>` : ""}`;
+  }
+  $("#reply").innerHTML = `<div class="reply"><div class="q"><span>${esc(r.text)}</span><span>${meta}${stt}</span></div>${body}</div>`;
+  if (r.mode === "entry") {
+    if (!note) toast(L().written);
+    if (r.refine && !note) pollRefine(r);
+    $("#undoBtn").onclick = async () => { await Promise.all(r.ids.map(id => api(`/api/entries/${id}`, { method: "DELETE" }))); $("#reply").innerHTML = ""; toast(L().removed); refresh(); };
+    refresh();
+  } else {
+    $$("#reply [data-act]").forEach(b => b.onclick = () => act(r.actions[+b.dataset.act]));
+    $$("#reply [data-open]").forEach(b => b.onclick = () => openCust(+b.dataset.open));
+  }
+}
+/* Gemma re-reads every entry in the background and quietly fixes it if the fast parse was wrong. */
+async function pollRefine(r) {
+  const job = r.refine, t0 = Date.now();
+  while (Date.now() - t0 < 30000) {
+    await new Promise(res => setTimeout(res, 800));
+    let j; try { j = await api(`/api/refine/${job}`); } catch { return; }
+    if (j.status !== "done") continue;
+    if (!$("#reply .reply") || r._gone) return;
+    if (j.changed) { show({ ...r, parsed: { ...j.parsed, _engine: j.engine }, ids: j.ids, refine: null }, L().corrected(j.engine)); refresh(); }
+    else { const m = $("#reply .q span:last-child"); if (m && j.engine !== "rules") m.textContent = L().confirmed(j.engine); }
+    return;
+  }
+}
+function act(a) { if (!a) return; a.type === "remind" ? remind(a.customer, a.due) : draftOrder(); }
+
+/* ---------------- briefing + lists ---------------- */
+function renderBrief() {
+  const B = S.brief; if (!B) return;
+  $("#todaySub").textContent = L().sub(inr(B.total_due), B.accounts);
+  $("#brief").innerHTML = B.cards.map((c, i) => `<li>
+      <div class="kind">${L().briefKind[c.kind]}</div>
+      <div><div class="t">${esc(c.title)}</div><div class="b">${esc(c.body)}</div>
+        ${c.names ? `<div class="names">${c.names.map(n => `<button data-name="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}</div>
+      <div class="act">${c.action ? `<button class="btn ${i === 0 ? "primary" : ""}" data-card="${i}">${c.action.type === "remind" ? L().remind : L().order}</button>` : ""}</div>
+    </li>`).join("");
+  $$("#brief [data-card]").forEach(b => b.onclick = () => act(B.cards[+b.dataset.card].action));
+  $$("#brief [data-name]").forEach(b => b.onclick = () => { const x = (S.ledger?.balances || []).find(y => y.name === b.dataset.name); if (x) openCust(x.id); });
+  const R = S.ins?.restock;
+  $("#briefMeta").textContent = R?.next_festival ? `${festName(R.next_festival)} · ${R.days_to_festival}d` : "";
+}
+function renderRecent() {
+  const rows = (S.ledger?.recent || []).slice(0, 9);
+  $("#recentMeta").textContent = "";
+  $("#recent").innerHTML = rows.map(e => `<li>
+      <span class="time tnum">${esc(e.ts.slice(11, 16))}</span>
+      <span><span class="nm">${esc(e.customer || L().walkin)}</span> <span class="what">${e.item ? "· " + esc((e.qty != null ? +e.qty + " " + (e.unit || "") + " " : "") + itemName(e.item)) : ""}</span></span>
+      <span class="amt ${e.kind} tnum">${e.kind === "payment" ? "+" : ""}${e.amount ? inr(e.amount) : "—"}<button class="x" data-del="${e.id}" aria-label="Remove">✕</button></span></li>`).join("") || `<li class="empty">—</li>`;
+  $$("#recent [data-del]").forEach(b => b.onclick = async () => { await api(`/api/entries/${b.dataset.del}`, { method: "DELETE" }); toast(L().removed); refresh(); });
+}
+const riskMap = () => Object.fromEntries((S.ins?.risk?.customers || []).map(c => [c.customer, c]));
+function sortedPeople(q = "") {
+  const rm = riskMap();
+  let list = (S.ledger?.balances || []).map(b => ({ ...b, r: rm[b.name] }));
+  if (q) list = list.filter(b => b.name.toLowerCase().includes(q.toLowerCase()));
+  const by = { risk: (a, b) => (b.r?.risk ?? -1) - (a.r?.risk ?? -1) || b.due - a.due, due: (a, b) => b.due - a.due, name: (a, b) => a.name.localeCompare(b.name) };
+  return list.sort(by[S.sort]);
+}
+function renderBal() {
+  const list = sortedPeople().slice(0, 9);
+  $("#balMeta").textContent = S.ledger ? L().accounts(S.ledger.balances.length) : "";
+  $("#bal").innerHTML = list.map(b => `<li data-id="${b.id}"><span class="nm">${esc(b.name)}</span>
+      <span>${b.r ? `<span class="pill ${b.r.band}">${L().band[b.r.band]}</span>` : ""}</span><span class="amt tnum">${inr(b.due)}</span></li>`).join("") || `<li class="empty">${L().noCust}</li>`;
+  $$("#bal [data-id]").forEach(li => li.onclick = () => openCust(+li.dataset.id));
+}
+
+/* ---------------- customers ---------------- */
+function renderPeople() {
+  const list = sortedPeople($("#search").value.trim());
+  $("#people").innerHTML = list.map(b => `<li><button data-id="${b.id}" ${S.sel === b.id ? 'aria-current="true"' : ""}>
+      <span class="dot ${b.r ? { high: "", watch: "", ok: "on" }[b.r.band] : "off"}" style="${b.r?.band === "high" ? "background:var(--risk)" : b.r?.band === "watch" ? "background:#C99A2E" : ""}"></span>
+      <span class="pn">${esc(b.name)}</span><span class="pd">${inr(b.due)}</span></button></li>`).join("") || `<li class="empty">${L().noCust}</li>`;
+  $$("#people [data-id]").forEach(b => b.onclick = () => openCust(+b.dataset.id, false));
+}
+$("#search").oninput = renderPeople;
+$$(".seg button").forEach(b => b.onclick = () => { S.sort = b.dataset.sort; $$(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); renderPeople(); });
+function pickFirst() { const p = sortedPeople()[0]; p ? openCust(p.id, false) : renderDetail(); }
+async function openCust(id, sw = true) {
+  if (sw) go("customers");
+  S.sel = id; renderPeople();
+  $("#detail").innerHTML = `<div class="skel"></div><div class="skel"></div>`;
+  try { S.cust = await api(`/api/customer/${id}`); } catch { S.cust = null; }
+  renderDetail();
+}
+const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; };
+function reasons(r) {
+  const all = (S.ins?.risk?.customers || []).map(c => c.features), f = r.features, out = [], gap = Math.round(f.avg_pay_gap);
+  out.push(f.days_since_payment > gap * 1.15 ? ["bad", L().since(f.days_since_payment, gap)] : ["good", L().sinceOk(f.days_since_payment, gap)]);
+  const p = Math.round(f.repay_ratio * 100); out.push(p < 75 ? ["bad", L().ratioBad(p)] : ["good", L().ratioOk(p)]);
+  const m1 = median(all.map(x => x.credit_amt_30d)); if (m1 && f.credit_amt_30d > m1 * 1.5) out.push(["bad", L().recentBad(inr(f.credit_amt_30d))]);
+  const m2 = median(all.map(x => x.due)); if (m2 && f.due > m2 * 2) out.push(["bad", L().dueBad((f.due / m2).toFixed(1))]);
+  return out;
+}
+function line({ pts, w = 640, h = 200, color = "var(--ink)", fmt = inr, xl = [], base = null, mark = null, area = true }) {
+  if (pts.length < 2) return "";
+  const P = { l: 60, r: 8, t: 10, b: 26 }, ys = pts.concat(base != null ? [base] : []), max = Math.max(...ys) * 1.1 || 1;
+  const X = i => P.l + i / (pts.length - 1) * (w - P.l - P.r), Y = v => P.t + (1 - v / max) * (h - P.t - P.b);
+  const d = pts.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join("");
+  let s = `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img">`;
+  [0, .5, 1].forEach(f => { const v = f * max; s += `<line x1="${P.l}" x2="${w - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${P.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmt(v)}</text>`; });
+  xl.forEach(([i, t]) => { s += `<text x="${X(i)}" y="${h - 6}" text-anchor="${i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}">${esc(t)}</text>`; });
+  if (base != null) s += `<line x1="${P.l}" x2="${w - P.r}" y1="${Y(base)}" y2="${Y(base)}" stroke="var(--ink-3)" stroke-dasharray="4 3"/>`;
+  if (mark) s += `<line x1="${X(mark[0])}" x2="${X(mark[0])}" y1="${P.t}" y2="${h - P.b}" stroke="var(--line-2)"/><text x="${X(mark[0]) - 6}" y="${P.t + 12}" text-anchor="end" style="fill:var(--ink-2)">${esc(mark[1])}</text>`;
+  if (area) s += `<path d="${d}L${X(pts.length - 1)} ${Y(0)}L${X(0)} ${Y(0)}Z" fill="${color}" opacity=".06"/>`;
+  s += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.75" stroke-linejoin="round"/><circle cx="${X(pts.length - 1)}" cy="${Y(pts.at(-1))}" r="3.5" fill="${color}"/>`;
+  return s + "</svg>";
+}
+function renderDetail() {
+  const c = S.cust;
+  if (!c) { $("#detail").innerHTML = `<div class="empty">${L().noCust}</div>`; return; }
+  const r = c.risk, col = r ? { high: "var(--risk)", watch: "#C99A2E", ok: "var(--accent)" }[r.band] : "var(--ink)";
+  const pts = c.series.map(p => p.balance), n = pts.length;
+  const xl = n > 2 ? [[0, shortDate(c.series[0].ts)], [n - 1, shortDate(c.series[n - 1].ts)]] : [];
+  $("#detail").innerHTML = `
+    <div class="d-head"><div><h1>${esc(c.name)}</h1><div class="sub">${r ? `<span class="pill ${r.band}">${L().band[r.band]}</span>&nbsp; ${L().lastPaid(r.days_since_payment)}` : ""}</div></div>
+      <div class="d-due"><span>${L().owes}</span><b class="tnum">${inr(c.due)}</b></div></div>
+    ${r ? `<div class="risk"><div class="score"><b class="tnum" style="color:${col}">${Math.round(r.risk * 100)}%</b><span>${L().chance}</span><div class="meter"><i style="width:${r.risk * 100}%;background:${col}"></i></div></div>
+      <div class="why"><h3>${L().why}</h3><ul>${reasons(r).map(([k, s]) => `<li class="${k}">${esc(s)}</li>`).join("")}</ul><div class="note">${L().whyNote}</div></div></div>` : ""}
+    <div class="facts"><div>${L().facts[0]}<b class="tnum">${inr(c.credit_total)}</b></div><div>${L().facts[1]}<b class="tnum">${inr(c.paid_total)}</b></div><div>${L().facts[2]}<b class="tnum">${num(c.n_entries)}</b></div></div>
+    ${c.due > 0 ? `<div class="d-actions"><button class="btn primary" id="remBtn">${L().remind}</button></div>` : ""}
+    <div class="sect"><h2 class="h">${L().balance}</h2>${line({ pts, xl, color: col })}</div>
+    <div class="sect"><h2 class="h">${L().history}</h2><ul class="list">${c.entries.slice(0, 12).map(e => `<li>
+      <span class="time">${shortDate(e.ts)}</span><span class="what">${e.item ? esc((e.qty != null ? +e.qty + " " + (e.unit || "") + " " : "") + itemName(e.item)) : L().kind[e.kind]}</span>
+      <span class="amt ${e.kind} tnum">${e.kind === "payment" ? "+" : ""}${inr(e.amount)}</span></li>`).join("")}</ul></div>`;
+  const rb = $("#remBtn"); if (rb) rb.onclick = () => remind(c.name, c.due);
+}
+
+/* ---------------- forecast ---------------- */
+function renderForecast() {
+  const R = S.ins?.restock; if (!R?.items?.length) return;
+  const fest = R.items[0].festival_14d != null && R.next_festival;
+  $("#fcTitle").textContent = L().fcTitle(fest ? festName(R.next_festival) : null, R.days_to_festival);
+  $("#fcSub").textContent = L().fcSub(fest);
+  $("#fcHead").innerHTML = L().fcCols(fest).map(c => `<th>${c}</th>`).join("");
+  $("#fcBody").innerHTML = R.items.map(i => {
+    const f = fest ? i.festival_14d : i.next_7d, n = fest ? i.normal_14d : i.normal_7d, p = fest ? i.festival_change_pct : i.week_change_pct, x = Math.max(0, Math.ceil(f - n));
+    return `<tr data-item="${esc(i.item)}" aria-selected="${S.item === i.item}" tabindex="0"><td class="item">${esc(itemName(i.item))}</td>
+      <td class="tnum">${num(n)} ${unit(i.item)}</td><td class="tnum">${num(f)} ${unit(i.item)}</td>
+      <td class="tnum ${p > 0 ? "up" : "down"}">${p > 0 ? "+" : ""}${p ?? 0}%</td><td class="tnum">${x ? "+" + num(x) + " " + unit(i.item) : "—"}</td></tr>`;
+  }).join("");
+  $$("#fcBody tr").forEach(t => { t.onclick = () => { S.item = t.dataset.item; renderForecast(); }; t.onkeydown = e => e.key === "Enter" && t.click(); });
+  $("#fcNote").textContent = L().fcNote(R.engine, num(R.train_rows), (S.ins.ms / 1000).toFixed(1) + "s");
+  const it = R.items.find(i => i.item === S.item) || R.items[0]; S.item = it.item;
+  const start = new Date(R.from), n = it.daily.length;
+  const fi = R.next_festival ? Math.round((new Date(R.next_festival) - start) / 864e5) : null;
+  $("#itemTitle").textContent = L().itemTitle(itemName(it.item));
+  $("#itemChart").innerHTML = line({ pts: it.daily, w: 520, h: 240, color: "var(--accent)", fmt: v => num(v) + " " + unit(it.item),
+    xl: [[0, shortDate(R.from)], [n - 1, shortDate(new Date(start.getTime() + (n - 1) * 864e5).toISOString())]],
+    base: fest ? it.normal_14d / 14 : it.normal_7d / 7, mark: fi != null && fi < n ? [fi, festName(R.next_festival)] : null });
+}
+
+/* ---------------- dialogs ---------------- */
+const dlg = $("#dlg");
+$("#dlgClose").onclick = () => dlg.close();
+$("#dlgCopy").onclick = async () => { try { await navigator.clipboard.writeText($("#dlgText").value); toast(L().copied); } catch {} };
+const syncWa = () => { $("#dlgWa").href = "https://wa.me/?text=" + encodeURIComponent($("#dlgText").value); };
+$("#dlgText").oninput = syncWa;
+async function remind(name, due) {
+  $("#dlgTitle").textContent = L().reminderFor(name); $("#dlgSub").textContent = L().reminderSub; $("#dlgText").value = L().gemmaWriting; dlg.showModal();
+  try { $("#dlgText").value = (await post("/api/reminder", { customer: name, due, language: lang === "mr" ? "marathi" : "simple english" })).text; } catch (e) { toast(e.message); }
+  syncWa();
+}
+async function draftOrder() {
+  $("#dlgTitle").textContent = L().orderT; $("#dlgSub").textContent = L().orderSub; $("#dlgText").value = "…"; dlg.showModal();
+  try { $("#dlgText").value = (await api(`/api/order?lang=${lang}`)).text; } catch (e) { toast(e.message); }
+  syncWa();
+}
+$("#orderBtn").onclick = draftOrder;
+
+/* ---------------- under the hood ---------------- */
+async function loadHood() { try { [S.summary, S.bt] = await Promise.all([api("/api/summary"), api("/api/backtest")]); } catch {} renderHood(); }
+function renderHood() {
+  const h = S.health || {}, W = L().where;
+  const st = [["on", W.local], [h.whisper ? "on" : "off", h.whisper ? W.local : W.off], [h.model_ready ? "on" : "off", h.model_ready ? W.local : W.rules], ["on", W.local],
+    /API/.test(h.tabpfn || "") ? ["cloud", W.cloud] : /local/.test(h.tabpfn || "") ? ["on", W.local] : ["off", W.base]];
+  $("#steps").innerHTML = L().stages.map(([t, d], i) => `<div class="step"><div class="w"><i class="dot ${st[i][0]}"></i>${st[i][1]}</div><h3>${t}</h3><p>${d}</p></div>`).join("");
+  $("#stays").innerHTML = L().stays.map(s => `<li>${s}</li>`).join("");
+  $("#leaves").innerHTML = L().leaves.map(s => `<li>${s}</li>`).join("");
+  const B = S.bt, bt = L().bt, pct = v => (v == null ? "—" : Math.round(v * 100) + "%");
+  if (B?.available) {
+    const tab = B.methods.includes("auto");
+    const rows = B.restock.map(r => { const v = [r.naive, r.baseline, tab ? r.auto : null], b = Math.min(...v.filter(x => x != null));
+      return `<tr><td>${esc(r.window)}</td>${v.map(x => `<td class="tnum ${x === b ? "best" : ""}">${pct(x)}</td>`).join("")}</tr>`; }).join("");
+    const rk = B.risk, ms = [["rule", bt.rule], ["baseline", bt.hgb], ["auto", bt.tab]].filter(([m]) => rk[m]), ba = Math.max(...ms.map(([m]) => rk[m].auc));
+    $("#bt").innerHTML = `<table class="t static"><thead><tr><th>${bt.win}</th><th>${bt.naive}</th><th>${bt.hgb}</th><th>${bt.tab}</th></tr></thead><tbody>${rows}</tbody><caption>${bt.wape} ${B.data === "demo" ? bt.demo : ""}</caption></table>
+      <table class="t static" style="margin-top:28px"><thead><tr><th>${bt.model}</th><th>${bt.auc}</th><th>${bt.hit}</th></tr></thead><tbody>
+      ${ms.map(([m, l]) => `<tr><td>${l}</td><td class="tnum ${rk[m].auc === ba ? "best" : ""}">${rk[m].auc.toFixed(2)}</td><td class="tnum">${pct(rk[m].precision_at_k)}</td></tr>`).join("")}</tbody><caption>${bt.cap(rk.n)}</caption></table>`;
+  } else $("#bt").innerHTML = `<div class="empty">${bt.none}</div>`;
+  const Wk = S.summary?.weeks || [];
+  if (Wk.length) {
+    const w = 520, hh = 220, P = { l: 60, r: 4, t: 10, b: 26 }, keys = [["sale", "var(--ink)"], ["credit", "var(--risk)"], ["payment", "var(--accent)"]];
+    const max = Math.max(...Wk.flatMap(x => keys.map(([k]) => x[k]))) * 1.08, gw = (w - P.l - P.r) / Wk.length, bw = Math.min(10, gw / 4.5);
+    const Y = v => P.t + (1 - v / max) * (hh - P.t - P.b);
+    let s = `<svg class="chart" viewBox="0 0 ${w} ${hh}" role="img">`;
+    [0, .5, 1].forEach(f => { const v = f * max; s += `<line x1="${P.l}" x2="${w - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${P.l - 8}" y="${Y(v) + 4}" text-anchor="end">${inr(v)}</text>`; });
+    Wk.forEach((x, i) => { const gx = P.l + i * gw + gw / 2 - bw * 1.5 - 2;
+      keys.forEach(([k, c], j) => { s += `<rect x="${gx + j * (bw + 2)}" y="${Y(x[k])}" width="${bw}" height="${Math.max(0, Y(0) - Y(x[k]))}" rx="1.5" fill="${c}"><title>${inr(x[k])}</title></rect>`; });
+      if (i % 3 === 0) s += `<text x="${P.l + i * gw + gw / 2}" y="${hh - 6}" text-anchor="middle">${shortDate(x.week)}</text>`; });
+    $("#weeks").innerHTML = s + "</svg>";
+  }
+}
+
+/* ---------------- status + load ---------------- */
+function renderStatus() {
+  const h = S.health; if (!h) return;
+  $("#localDot").className = "dot " + (h.model_ready ? "on" : "off");
+  $("#localText").textContent = L().localText(h);
+  $("#demo").hidden = !h.demo;
+}
+function renderAll() {
+  renderStatus(); renderBrief(); renderRecent(); renderBal(); renderPeople(); renderForecast();
+  if (S.cust) renderDetail();
+  if (current === "hood" || S.summary) renderHood();
+}
+async function refresh() {
+  S.ledger = await api("/api/ledger"); renderRecent(); renderBal(); renderPeople();
+  try { S.ins = await api("/api/insights"); } catch {}
+  try { S.brief = await api(`/api/brief?lang=${lang}`); } catch {}
+  renderBrief(); renderBal(); renderPeople(); renderForecast();
+  if (current === "customers") S.sel ? openCust(S.sel, false) : pickFirst();
+}
+(async function init() {
+  applyLang();
+  try { S.health = await api("/api/health"); } catch {}
+  renderStatus();
+  const start = (location.hash || "#today").slice(1);
+  if (["customers", "forecast", "hood"].includes(start)) go(start);
+  await refresh();
+})();

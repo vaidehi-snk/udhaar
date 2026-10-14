@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Udhaar</title>
+<meta name="description" content="A local AI back-office for small shops. Speak entries, ask questions, get a daily briefing. Runs on the shop's own laptop.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='%230F6B4F'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <div class="word"><i></i>udhaar</div>
+    <nav class="tabs" aria-label="Sections">
+      <button data-view="today" aria-current="page" data-i18n="nav.today">Today</button>
+      <button data-view="customers" data-i18n="nav.customers">Customers</button>
+      <button data-view="forecast" data-i18n="nav.forecast">Forecast</button>
+      <button data-view="hood" data-i18n="nav.hood">Under the hood</button>
+    </nav>
+    <div class="bar-r">
+      <button class="local" id="localBtn" title="What runs where"><i class="dot" id="localDot"></i><span id="localText">Local</span></button>
+      <div class="lang" role="group" aria-label="Language">
+        <button data-lang="en" aria-pressed="true">EN</button><button data-lang="mr" aria-pressed="false">मराठी</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="demo" id="demo" hidden data-i18n="demo"></div>
+
+  <!-- TODAY -->
+  <section class="view active" id="v-today">
+    <h1 class="hello" id="hello"></h1>
+    <div class="sub" id="todaySub"></div>
+
+    <div class="cmd">
+      <form id="cmd" autocomplete="off">
+        <input id="q" aria-label="Write an entry or ask a question">
+        <button type="button" class="mic" id="mic" aria-label="Speak">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12h-2Z"/></svg>
+        </button>
+        <button class="go" id="goBtn" data-i18n="cmd.go">Enter</button>
+      </form>
+      <div class="hints" id="hints"></div>
+      <div id="reply"></div>
+    </div>
+
+    <section class="brief">
+      <h2 class="h"><span style="color:var(--ink);font-size:15px;font-weight:600" data-i18n="brief.title">Today's briefing</span><span id="briefMeta"></span></h2>
+      <ol id="brief"><li><div class="skel" style="grid-column:1/-1"></div></li></ol>
+    </section>
+
+    <div class="two">
+      <section>
+        <h2 class="h"><span style="color:var(--ink);font-size:15px;font-weight:600" data-i18n="recent.title">Recent entries</span><span id="recentMeta"></span></h2>
+        <ul class="list" id="recent"></ul>
+      </section>
+      <section>
+        <h2 class="h"><span style="color:var(--ink);font-size:15px;font-weight:600" data-i18n="bal.title">Udhaar balances</span><span id="balMeta"></span></h2>
+        <ul class="list bal" id="bal"></ul>
+      </section>
+    </div>
+  </section>
+
+  <!-- CUSTOMERS -->
+  <section class="view" id="v-customers">
+    <div class="cust">
+      <div class="people">
+        <input id="search" type="search" data-i18n-ph="cust.search">
+        <div class="seg" role="group">
+          <button data-sort="risk" aria-pressed="true" data-i18n="cust.risk">Risk</button>
+          <button data-sort="due" aria-pressed="false" data-i18n="cust.due">Due</button>
+          <button data-sort="name" aria-pressed="false" data-i18n="cust.name">Name</button>
+        </div>
+        <ul id="people"></ul>
+      </div>
+      <div id="detail"><div class="skel"></div><div class="skel"></div></div>
+    </div>
+  </section>
+
+  <!-- FORECAST -->
+  <section class="view" id="v-forecast">
+    <div class="fc-head">
+      <div><h1 class="hello" id="fcTitle"></h1><div class="sub" id="fcSub"></div></div>
+      <button class="btn green" id="orderBtn" data-i18n="fc.order">Draft wholesaler order</button>
+    </div>
+    <div class="fc-grid">
+      <div>
+        <table class="t"><thead><tr id="fcHead"></tr></thead><tbody id="fcBody"></tbody></table>
+        <div class="note" id="fcNote"></div>
+      </div>
+      <div class="stick">
+        <h2 class="h" id="itemTitle"></h2>
+        <div class="legend"><span><i></i><span data-i18n="fc.daily">Forecast per day</span></span><span><i class="dash"></i><span data-i18n="fc.usual">Usual day</span></span></div>
+        <div id="itemChart"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- UNDER THE HOOD -->
+  <section class="view" id="v-hood">
+    <h1 class="hello" data-i18n="hood.title">What runs where</h1>
+    <div class="sub" data-i18n="hood.sub">Every model is open. Everything except optional anonymous numbers stays on the shop's laptop.</div>
+    <div class="steps" id="steps" style="margin-top:28px"></div>
+    <div class="priv">
+      <div><h2 class="h" data-i18n="hood.stays">Never leaves the laptop</h2><ul id="stays"></ul></div>
+      <div><h2 class="h" data-i18n="hood.leaves">Can leave, only if you allow it</h2><ul id="leaves"></ul></div>
+    </div>
+    <div class="fc-grid">
+      <div><h2 class="h" data-i18n="hood.bt">Tested on weeks the models never saw</h2><div id="bt"></div></div>
+      <div><h2 class="h" data-i18n="hood.weeks">Week by week</h2>
+        <div class="legend"><span><i></i><span data-i18n="w.cash">Cash sales</span></span><span><i style="background:var(--risk)"></i><span data-i18n="w.credit">Udhaar given</span></span><span><i style="background:var(--accent)"></i><span data-i18n="w.paid">Collected</span></span></div>
+        <div id="weeks"></div></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <h3 id="dlgTitle"></h3><p id="dlgSub"></p>
+  <textarea id="dlgText"></textarea>
+  <div class="row"><button class="btn" id="dlgClose" data-i18n="dlg.close">Close</button><button class="btn" id="dlgCopy" data-i18n="dlg.copy">Copy</button><a class="btn green" id="dlgWa" target="_blank" rel="noopener" data-i18n="dlg.wa">Send on WhatsApp</a></div>
+</dialog>
+<div class="toast" id="toast" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

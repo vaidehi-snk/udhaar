@@ -1,0 +1,62 @@
+{
+  "restock": [
+    {
+      "window": "Ordinary fortnight (June)",
+      "from": "2026-06-01",
+      "days": 14,
+      "naive": 0.255,
+      "baseline": 0.229,
+      "baseline_engine": "gradient boosting baseline",
+      "baseline_s": 2.1,
+      "auto": 0.24,
+      "auto_engine": "TabPFN-3.5 (Prior Labs API)"
+    },
+    {
+      "window": "Ganesh Chaturthi build-up",
+      "from": "2026-08-28",
+      "days": 18,
+      "naive": 0.268,
+      "baseline": 0.216,
+      "baseline_engine": "gradient boosting baseline",
+      "baseline_s": 0.6,
+      "auto": 0.2,
+      "auto_engine": "TabPFN-3.5 (Prior Labs API)"
+    },
+    {
+      "window": "Navratri build-up",
+      "from": "2026-09-24",
+      "days": 18,
+      "naive": 0.27,
+      "baseline": 0.224,
+      "baseline_engine": "gradient boosting baseline",
+      "baseline_s": 0.6,
+      "auto": 0.21,
+      "auto_engine": "TabPFN-3.5 (Prior Labs API)"
+    }
+  ],
+  "risk": {
+    "n": 195,
+    "late_rate": 0.23,
+    "baseline": {
+      "auc": 0.812,
+      "precision_at_k": 0.556,
+      "engine": "gradient boosting baseline"
+    },
+    "rule": {
+      "auc": 0.67,
+      "precision_at_k": 0.4,
+      "engine": "rule"
+    },
+    "auto": {
+      "auc": 0.825,
+      "precision_at_k": 0.6,
+      "engine": "TabPFN-3.5 (Prior Labs API)"
+    }
+  },
+  "methods": [
+    "baseline",
+    "auto"
+  ],
+  "ran_at": "2026-10-13T13:30:45",
+  "data": "demo"
+}

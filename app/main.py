@@ -1,0 +1,284 @@
+"""Udhaar — an offline voice ledger for kirana shops.
+
+Run:  uvicorn app.main:app --host 0.0.0.0 --port 8000
+Then open http://localhost:8000 (or the laptop's LAN IP from the shop's phone).
+"""
+from __future__ import annotations
+
+import os
+import tempfile
+import threading
+import time
+import uuid
+from pathlib import Path
+
+import httpx
+import pandas as pd
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from . import assistant, db, parser, predict
+
+ROOT = Path(__file__).resolve().parent.parent
+DEMO = os.environ.get("UDHAAR_DEMO") == "1"  # hosted demo: sample shop, no microphone pipeline
+app = FastAPI(title="Udhaar")
+_cache: dict = {"key": None, "data": None}
+
+
+@app.on_event("startup")
+def _seed_demo():
+    if DEMO:
+        with db.connect() as con:
+            empty = con.execute("SELECT COUNT(*) FROM entries").fetchone()[0] == 0
+        if empty:
+            from scripts import make_demo_data
+            make_demo_data.main(wipe=False)
+
+
+class TextIn(BaseModel):
+    text: str
+    save: bool = True
+
+
+class AskIn(BaseModel):
+    text: str
+    lang: str = "en"
+
+
+class EntryIn(BaseModel):
+    parsed: dict
+    raw_text: str = ""
+
+
+class ReminderIn(BaseModel):
+    customer: str
+    due: float
+    language: str = "marathi"
+
+
+def _commit(parsed: dict, raw: str, source: str) -> list[int]:
+    with db.connect() as con:
+        return db.add_entries(con, parsed, raw, source)
+
+
+@app.get("/api/health")
+def health():
+    try:
+        tags = httpx.get(f"{parser.OLLAMA_URL}/api/tags", timeout=2).json()
+        models = [m["name"] for m in tags.get("models", [])]
+    except Exception:
+        models = []
+    stt_ok = True
+    try:
+        import faster_whisper  # noqa: F401
+    except Exception:
+        stt_ok = False
+    return {"ollama": bool(models), "model": parser.MODEL, "model_ready": parser.MODEL in models,
+            "whisper": stt_ok, "tabpfn": predict.engine_name(), "demo": DEMO}
+
+
+@app.post("/api/text")
+def from_text(body: TextIn):
+    parsed = parser.parse(body.text)
+    ids = _commit(parsed, body.text, "typed") if body.save else []
+    return {"text": body.text, "parsed": parsed, "ids": ids}
+
+
+_jobs: dict[str, dict] = {}
+
+
+def _refine(job: str, text: str, ids: list[int], first: dict, source: str):
+    """Background: Gemma re-reads the line. If it understood it differently, swap the entry."""
+    try:
+        better = parser.parse_with_gemma(text)
+    except Exception:
+        _jobs[job] = {"status": "done", "changed": False, "engine": "rules"}
+        return
+    same = {k: first.get(k) for k in ("kind", "customer", "items", "total")} == \
+           {k: better.get(k) for k in ("kind", "customer", "items", "total")}
+    if same:
+        _jobs[job] = {"status": "done", "changed": False, "engine": parser.MODEL}
+        return
+    with db.connect() as con:
+        rows = con.execute(f"SELECT ts FROM entries WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()
+        if len(rows) != len(ids):  # shopkeeper already undid or edited it
+            _jobs[job] = {"status": "done", "changed": False, "engine": parser.MODEL}
+            return
+        for i in ids:
+            db.undo(con, i)
+        new_ids = db.add_entries(con, better, text, source, ts=rows[0]["ts"])
+    _cache["key"] = None
+    _jobs[job] = {"status": "done", "changed": True, "engine": parser.MODEL, "parsed": better, "ids": new_ids}
+
+
+def _route(text: str, lang: str, source: str) -> dict:
+    """One box for everything: questions get answered, statements get written.
+    Entries are written instantly by the rules parser; Gemma checks them in the background,
+    so the counter never waits on the model."""
+    if assistant.is_question(text):
+        return {"mode": "answer", "text": text, **assistant.answer(text, insights(), lang)}
+    t0 = time.perf_counter()
+    parsed = parser.parse_with_rules(text)
+    parsed.update(_engine="rules", _ms=round((time.perf_counter() - t0) * 1000))
+    ids = _commit(parsed, text, source)
+    job = None
+    if DEMO is False and os.environ.get("UDHAAR_NO_REFINE") != "1":
+        job = uuid.uuid4().hex[:12]
+        _jobs[job] = {"status": "running"}
+        threading.Thread(target=_refine, args=(job, text, ids, parsed, source), daemon=True).start()
+    return {"mode": "entry", "text": text, "parsed": parsed, "ids": ids, "refine": job}
+
+
+@app.get("/api/refine/{job}")
+def refine_status(job: str):
+    return _jobs.get(job, {"status": "unknown"})
+
+
+@app.post("/api/ask")
+def ask(body: AskIn):
+    return _route(body.text.strip(), body.lang, "typed")
+
+
+@app.get("/api/brief")
+def brief(lang: str = "en"):
+    return assistant.brief(insights(), lang)
+
+
+@app.get("/api/order")
+def order(lang: str = "en"):
+    ins = insights()
+    return {"plan": assistant.order_plan(ins), "text": assistant.order_message(ins, lang)}
+
+
+@app.post("/api/voice")
+async def from_voice(audio: UploadFile = File(...), save: bool = True, lang: str = "en"):
+    from . import stt  # imported lazily so the app starts even without faster-whisper
+    suffix = Path(audio.filename or "clip.webm").suffix or ".webm"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+        f.write(await audio.read())
+        path = f.name
+    try:
+        heard = stt.transcribe(path)
+    finally:
+        os.unlink(path)
+    if not heard["text"]:
+        raise HTTPException(422, "Couldn't hear anything — try again closer to the mic.")
+    return {**_route(heard["text"], lang, "voice"), "language": heard["language"], "stt_ms": heard["ms"]}
+
+
+@app.post("/api/entries")
+def save_entry(body: EntryIn):
+    """Save a (possibly hand-corrected) parse."""
+    return {"ids": _commit(parser.normalise(body.parsed), body.raw_text, "corrected")}
+
+
+@app.delete("/api/entries/{entry_id}")
+def delete_entry(entry_id: int):
+    with db.connect() as con:
+        db.undo(con, entry_id)
+    return {"ok": True}
+
+
+@app.get("/api/ledger")
+def ledger():
+    with db.connect() as con:
+        bal = [b for b in db.balances(con) if b["due"] > 0]
+        rec = db.recent(con, 60)
+        today = con.execute("""SELECT
+            COALESCE(SUM(CASE WHEN kind='sale' THEN amount END),0) AS cash,
+            COALESCE(SUM(CASE WHEN kind='credit' THEN amount END),0) AS credit,
+            COALESCE(SUM(CASE WHEN kind='payment' THEN amount END),0) AS collected
+            FROM entries WHERE date(ts)=(SELECT date(MAX(ts)) FROM entries)""").fetchone()
+    return {"balances": bal, "recent": rec, "total_due": round(sum(b["due"] for b in bal)),
+            "today": dict(today)}
+
+
+@app.get("/api/insights")
+def insights(refresh: bool = False):
+    with db.connect() as con:
+        key = con.execute("SELECT COUNT(*), MAX(id) FROM entries").fetchone()
+        key = tuple(key)
+        if _cache["key"] == key and not refresh:
+            return _cache["data"]
+        df = pd.read_sql_query("SELECT * FROM entries", con)
+        names = {r["id"]: r["name"] for r in con.execute("SELECT id,name FROM customers")}
+    t0 = time.perf_counter()
+    data = {"restock": predict.restock_forecast(df), "risk": predict.udhaar_risk(df, names)}
+    data["ms"] = round((time.perf_counter() - t0) * 1000)
+    _cache.update(key=key, data=data)
+    return data
+
+
+@app.get("/api/customer/{cid}")
+def customer(cid: int):
+    with db.connect() as con:
+        c = con.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
+        if not c:
+            raise HTTPException(404, "No such customer")
+        rows = [dict(r) for r in con.execute(
+            "SELECT * FROM entries WHERE customer_id=? ORDER BY ts", (cid,))]
+    bal, series = 0.0, []
+    for r in rows:
+        bal += r["amount"] if r["kind"] == "credit" else -r["amount"] if r["kind"] == "payment" else 0
+        series.append({"ts": r["ts"], "balance": round(bal)})
+    data = _cache["data"] or insights()  # a slightly stale score beats making the shopkeeper wait
+    risk = next((x for x in (data["risk"].get("customers") or []) if x["customer"] == c["name"]), None)
+    return {"id": cid, "name": c["name"], "due": round(bal), "series": series[-120:],
+            "entries": list(reversed(rows))[:40], "risk": risk,
+            "n_entries": len(rows), "credit_total": round(sum(r["amount"] for r in rows if r["kind"] == "credit")),
+            "paid_total": round(sum(r["amount"] for r in rows if r["kind"] == "payment"))}
+
+
+@app.get("/api/summary")
+def summary(weeks: int = 10):
+    with db.connect() as con:
+        df = pd.read_sql_query("SELECT ts, kind, amount FROM entries", con)
+    if df.empty:
+        return {"weeks": []}
+    df["week"] = pd.to_datetime(df["ts"]).dt.to_period("W-SUN").dt.start_time
+    g = df.pivot_table(index="week", columns="kind", values="amount", aggfunc="sum").fillna(0)
+    last_day = pd.to_datetime(df["ts"]).max().normalize()
+    if len(g) > 1 and g.index[-1] + pd.Timedelta(days=6) > last_day:  # drop the unfinished week
+        g = g.iloc[:-1]
+    g = g.tail(weeks)
+    return {"weeks": [{"week": w.date().isoformat(), "sale": round(r.get("sale", 0)),
+                       "credit": round(r.get("credit", 0)), "payment": round(r.get("payment", 0))}
+                      for w, r in g.iterrows()]}
+
+
+@app.get("/api/backtest")
+def backtest():
+    f = db.DB_PATH.parent / "backtest.json"
+    if not f.exists():  # committed copy for the hosted demo
+        f = ROOT / "static" / "backtest.json"
+    if not f.exists():
+        return {"available": False}
+    import json
+    return {"available": True, **json.loads(f.read_text())}
+
+
+@app.post("/api/reminder")
+def reminder(body: ReminderIn):
+    """Gemma drafts a polite WhatsApp reminder the shopkeeper can send in one tap."""
+    prompt = (f"Write a short, warm WhatsApp message in {body.language} (use the native script) from a "
+              f"neighbourhood kirana shop owner to a regular customer, {body.customer}, gently reminding "
+              f"them that Rs {round(body.due)} is pending on their khata. Respectful, never threatening, "
+              f"2-3 lines, end with a thank you. Output only the message.")
+    try:
+        r = httpx.post(f"{parser.OLLAMA_URL}/api/generate", timeout=60, json={
+            "model": parser.MODEL, "prompt": prompt, "stream": False, "options": {"temperature": 0.6, "num_ctx": parser.NUM_CTX, "num_predict": 200}, "keep_alive": "30m"})
+        r.raise_for_status()
+        return {"text": r.json()["response"].strip(), "engine": parser.MODEL}
+    except Exception:
+        return {"text": f"नमस्कार {body.customer}, आपल्या खात्यावर ₹{round(body.due)} बाकी आहेत. "
+                        f"सवडीने भरून टाका. धन्यवाद! 🙏", "engine": "template"}
+
+
+app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
+
+
+@app.get("/")
+def index():
+    return FileResponse(ROOT / "static" / "index.html")
