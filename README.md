@@ -29,7 +29,7 @@ python scripts/make_demo_data.py                    # 13 months of sample histor
 uvicorn app.main:app --port 8000
 ```
 
-Open http://localhost:8000.
+Open http://localhost:8000 for the home page, or http://localhost:8000/app for the shop app itself (bookmark that one on the shop laptop).
 
 To use the mic from the shop's phone over Wi-Fi, run `python scripts/serve_https.py` and open the `https://…:8443` address it prints. Browsers only allow the microphone over HTTPS.
 
