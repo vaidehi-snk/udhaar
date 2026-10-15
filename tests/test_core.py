@@ -50,8 +50,7 @@ def test_api_and_predictions_on_demo_data():
     assert {"ghee", "maida", "besan", "sugar"} & set(top), top  # Diwali items rise
     bands = {x["customer"]: x["band"] for x in ins["risk"]["customers"]}
     assert bands.get("Bhosale Dada") == "high"
-    assert c.get("/").status_code == 200 and "fiado" in c.get("/").text      # landing page
-    assert c.get("/app").status_code == 200 and 'id="q"' in c.get("/app").text
+    assert c.get("/").status_code == 200
 
 
 def test_detail_summary_backtest_endpoints():

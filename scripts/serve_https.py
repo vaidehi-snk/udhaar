@@ -1,7 +1,7 @@
 """Serve Udhaar over HTTPS on the shop's Wi-Fi so the phone's browser allows the microphone.
 
     python scripts/serve_https.py
-Then open https://<laptop-ip>:8443/app on the phone and accept the one-time certificate warning.
+Then open https://<laptop-ip>:8443 on the phone and accept the one-time certificate warning.
 """
 import datetime
 import ipaddress
@@ -50,5 +50,5 @@ def make_cert(ip: str):
 if __name__ == "__main__":
     ip = lan_ip()
     make_cert(ip)
-    print(f"\n  Open on the shop phone:  https://{ip}:8443/app\n")
+    print(f"\n  Open on the shop phone:  https://{ip}:8443\n")
     uvicorn.run("app.main:app", host="0.0.0.0", port=8443, ssl_keyfile=str(KEY), ssl_certfile=str(CERT))

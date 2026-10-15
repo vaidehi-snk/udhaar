@@ -165,7 +165,7 @@ The result is a card that says **"Diwali in 25 days"** with ghee, maida, besan a
 
 ## Try it
 
-**Live demo:** [FILL: https://udhaar.tech]. The home page explains it in one screen; **Try the sample shop** opens the app with typed entries. The microphone version runs on the shop's own laptop, by design.
+**Live demo:** [FILL: https://udhaar.tech]. This is the sample shop with typed entries. The microphone version runs on the shop's own laptop, by design.
 
 ```bash
 git clone https://github.com/vaidehi-snk/udhaar && cd udhaar
