@@ -168,7 +168,7 @@ def _shot(steps: list[dict]) -> str:
 
 def plan_with_gemma(text: str) -> list[dict]:
     r = httpx.post(f"{parser.OLLAMA_URL}/api/chat", timeout=20, json={
-        "model": parser.MODEL, "stream": False, "format": Q_SCHEMA, "options": parser.OPTS,
+        "model": parser.MODEL, "stream": False, "format": Q_SCHEMA, "options": parser.OPTS | {"num_predict": 200},
         "keep_alive": "30m",
         "messages": [{"role": "system", "content": Q_SYSTEM},
                      {"role": "user", "content": "Patil kaku kitna baki hai?"},
@@ -385,7 +385,8 @@ JOIN_WORDS = {"and", "also", "ani", "aani", "aur", "va", "y", "tambien", "at", "
 def needs_planner(text: str) -> bool:
     """Compound or advice-style questions go to Gemma's planner; one-liners stay on the instant rules."""
     toks = _tokens(text)
-    return (text.count("?") > 1 or len(toks) >= 12 or bool(set(toks) & ADVICE_WORDS)
+    # "what should I order?" is a one-liner the rules answer instantly; only long advice questions need a plan
+    return (text.count("?") > 1 or len(toks) >= 12 or (bool(set(toks) & ADVICE_WORDS) and len(toks) >= 7)
             or (bool(set(toks) & JOIN_WORDS) and sum(t in QUESTION_WORDS for t in toks) >= 2))
 
 

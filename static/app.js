@@ -235,7 +235,7 @@ $("#mic").onclick = async () => {
 };
 
 function show(r, note = "") {
-  const meta = r.mode === "entry" ? (note || L().by(r.parsed._engine, (r.parsed._ms / 1000).toFixed(1) + "s") + (r.refining ? " · " + L().checking : "")) : L().by(r.engine, (r.ms / 1000).toFixed(1) + "s");
+  const meta = r.mode === "entry" ? (note || L().by(r.parsed._engine, (r.parsed._ms / 1000).toFixed(1) + "s") + (r.refining ? " · " + L().checking : "")) : L().by(r.engine === "rules" ? "instant" : r.engine, (r.ms / 1000).toFixed(1) + "s");
   const stt = r.stt_ms ? ` · whisper ${(r.stt_ms / 1000).toFixed(1)}s` : "";
   let body;
   if (r.mode === "entry") {

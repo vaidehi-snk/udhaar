@@ -28,8 +28,20 @@ app = FastAPI(title="Udhaar")
 _cache: dict = {"key": None, "data": None}
 
 
+def _warm_gemma():
+    """Load Gemma into memory at startup, so the first entry or question isn't a 15 s cold start."""
+    try:
+        httpx.post(f"{parser.OLLAMA_URL}/api/generate", timeout=120,
+                   json={"model": parser.MODEL, "prompt": "ok", "stream": False, "keep_alive": "30m",
+                         "options": {"num_predict": 1, "num_ctx": parser.NUM_CTX}})
+    except Exception:
+        pass
+
+
 @app.on_event("startup")
 def _seed_demo():
+    if not DEMO:
+        threading.Thread(target=_warm_gemma, daemon=True).start()
     if DEMO:
         with db.connect() as con:
             empty = con.execute("SELECT COUNT(*) FROM entries").fetchone()[0] == 0
